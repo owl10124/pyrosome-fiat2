@@ -1,5 +1,4 @@
-
-Require Import Lists.List.
+Require Import Lists.List Coq.Classes.RelationClasses.
 Import ListNotations.
 Open Scope list.
 
@@ -9,10 +8,13 @@ From coqutil Require Import Map.Interface.
 From Utils Require Import Utils UnionFind Monad ExtraMaps.
 From Utils.EGraph Require Import Defs Semantics QueryOpt.
 Import Monad.StateMonad.
-From Pyrosome.Theory Require Import Core.
+From Pyrosome.Theory Require Import Core ModelImpls.
+From Pyrosome.Theory Require WfCutElim.
 Import Core.Notations.
 From Pyrosome.Tools.EGraph Require Import Defs.
 
+
+#[local] Hint Resolve Properties.map.extends_refl : utils.
 
 (*TODO: move to Monad.v
       TODO: generalize monad equiv?   
@@ -44,6 +46,20 @@ Proof.
 Qed.
 
 
+(*TODO: move somewhere*)
+Lemma NoDup_fresh A B (s : named_list A B)
+  : NoDup (map fst s) <-> all_fresh s.
+Proof.
+  induction s;
+    basic_goal_prep.
+  { split; auto; try constructor. }
+  rewrite <- IHs; clear IHs.
+  intuition try constructor; auto;
+    inversion H; subst; eauto.
+Qed.
+  
+
+
 Lemma Mmap_lookup_self  {S A} `{Eqb_ok S} (x : NamedList.named_list S A)
   : all_fresh x -> Some (map snd x) = list_Mmap (named_list_lookup_err x) (map fst x).
 Proof.
@@ -69,6 +85,19 @@ Proof.
     basic_utils_crush.
 Qed.
 #[local] Hint Rewrite combine_map_fst_snd : utils.
+
+
+  (*TODO: duplicated*)    
+  Ltac iss_case :=
+    lazymatch goal with
+    | H : ?ma <$> _ |- _ =>
+        let Hma := fresh "Hma" in
+        destruct ma eqn:Hma; cbn in H;[| tauto]
+    | |- ?ma <?> _ =>
+        let Hma := fresh "Hma" in
+        destruct ma eqn:Hma; cbn;[| tauto]
+    end.
+  
 
 Section WithVar.
   Context (V : Type)
@@ -101,7 +130,8 @@ Section WithVar.
     (V_map : forall A, map.map V A)
       (V_map_plus : ExtraMaps.map_plus V_map)
       (V_map_ok : forall A, map.ok (V_map A))
-      (V_trie : forall A, map.map (list V) A).
+      (V_trie : forall A, map.map (list V) A)
+      (V_trie_ok : forall A, map.ok (V_trie A)).
 
   Notation instance := (instance V V V_map V_map V_trie).
 
@@ -112,9 +142,17 @@ Section WithVar.
   
   (* Include sort_of as special symbol/fn in db. *)
   Context (sort_of : V).
+  
+  Context (lt : V -> V -> Prop).
 
-  Section Properties.
-    Context (l : lang) {X} (i : instance X).
+  Notation state_sound_for_model := (state_sound_for_model lt).
+  
+  Context (lt_asymmetric : Asymmetric lt)
+    (lt_succ : forall x, lt x (succ x))
+    (lt_trans : Transitive lt).
+
+  Section WithLang.
+    Context (l : lang). (* {X} (i : instance X).*)
 
     Context (sort_of_fresh : fresh sort_of l).
 
@@ -127,13 +165,13 @@ Section WithVar.
 
     (* Note: can prove via lemma (should exist somewhere) that if
        a term is wf under some sort, it has this sort *)
-    Definition interp_sort_of args
-        : option term :=
-        @!let [e] <?- Some args in
+    Definition interp_sort_of (args : list (term + sort))
+        : option (term + sort) :=
+        @!let [inl e] <?- Some args in
           let (con f s) <?- Some e in
           let (term_rule c args t) <?- named_list_lookup_err l f in
           let (scon tf ts) := t in
-          ret (con tf ts[/with_names_from c s/]).
+          ret (inr (scon tf ts[/with_names_from c s/])).
 
     (*TODO: write?
     Context (is_sort is_term : V -> bool).
@@ -142,24 +180,56 @@ Section WithVar.
     (* since sorts and terms are all jumbled in the domain,
        construct a subsuming judgment.
      *)
-    Inductive lang_model_eq : term -> term -> Prop :=
-    | lm_eq_terms e1 e2 t : eq_term l [] t e1 e2 -> lang_model_eq e1 e2
-    | lm_eq_sorts e1 e2
-      : match e1, e2 with
-        | con f1 s1, con f2 s2 => eq_sort l [] (scon f1 s1) (scon f2 s2)
-        | _,_ => False
-        end ->
-        lang_model_eq e1 e2.
+    Inductive lang_model_eq : term + sort -> term + sort -> Prop :=
+    | lm_eq_terms e1 e2 t : eq_term l [] t e1 e2 -> lang_model_eq (inl e1) (inl e2)
+    | lm_eq_sorts t1 t2 : eq_sort l [] t1 t2 -> lang_model_eq (inr t1) (inr t2).
+    Hint Constructors lang_model_eq : lang_core.
+
+
+    Lemma invert_lang_model_eq_inl e1 e2
+      : lang_model_eq (inl e1) (inl e2) <-> exists t, eq_term l [] t e1 e2.
+    Proof.
+      intuition break; eauto with lang_core.
+      inversion H; try eexists; subst;eauto.
+    Qed.
+    #[local] Hint Rewrite invert_lang_model_eq_inl : lang_core.
+
+    
+    Lemma invert_lang_model_eq_inr e1 e2
+      : lang_model_eq (inr e1) (inr e2) <-> eq_sort l [] e1 e2.
+    Proof. prove_inversion_lemma. Qed.
+    #[local] Hint Rewrite invert_lang_model_eq_inr : lang_core.
+
+    
+    Lemma invert_lang_model_eq_inl_inr e1 e2
+      : lang_model_eq (inl e1) (inr e2) <-> False.
+    Proof. prove_inversion_lemma. Qed.
+    #[local] Hint Rewrite invert_lang_model_eq_inl_inr : lang_core.
+    
+    Lemma invert_lang_model_eq_inr_inl e1 e2
+      : lang_model_eq (inr e1) (inl e2) <-> False.
+    Proof. prove_inversion_lemma. Qed.
+    #[local] Hint Rewrite invert_lang_model_eq_inr_inl : lang_core.
 
     (* The reflexive case of _eq *)
-    Inductive lang_model_wf : term -> Prop :=
-    | lm_wf_term e t : wf_term l [] e t -> lang_model_wf e
-    | lm_wf_sort e
-      : match e with
-        | con f s => wf_sort l [] (scon f s)
-        | _ => False
-        end ->
-        lang_model_wf e.
+    Inductive lang_model_wf : term + sort -> Prop :=
+    | lm_wf_term e t : wf_term l [] e t -> lang_model_wf (inl e)
+    | lm_wf_sort t : wf_sort l [] t -> lang_model_wf (inr t).
+    Hint Constructors lang_model_wf : lang_core.
+    
+    Lemma invert_lang_model_wf_inl e
+      : lang_model_wf (inl e) <-> exists t, wf_term l [] e t.
+    Proof.
+      intuition break; eauto with lang_core.
+      inversion H; try eexists; subst;eauto.
+    Qed.
+    #[local] Hint Rewrite invert_lang_model_wf_inl : lang_core.
+
+    
+    Lemma invert_lang_model_wf_inr t
+      : lang_model_wf (inr t) <-> wf_sort l [] t.
+    Proof. prove_inversion_lemma. Qed.
+    #[local] Hint Rewrite invert_lang_model_wf_inr : lang_core.
 
     Context (wfl : wf_lang l).
 
@@ -177,75 +247,400 @@ Section WithVar.
       symmetry in case_match_eqn.
       apply named_list_lookup_err_in in case_match_eqn.
       basic_goal_prep;
-        basic_utils_crush.
-      apply lm_wf_sort;
-        basic_goal_prep;
-        basic_utils_crush.
-      inversion H; subst.
-      {
-        change (scon v0 l2 [/with_names_from n l0 /])
-          with (scon v0 l2) [/with_names_from n l0 /].
-        revert case_match_eqn.
-        generalize (scon v0 l2).
-        clear v0 l2.
-        intros.
-        use_rule_in_wf.
-        eapply wf_sort_subst_monotonicity; eauto.
-        1:basic_core_crush.
-        1:basic_core_crush.
-        eapply wf_subst_from_wf_args; eauto.
-        autorewrite with lang_core utils in *.
+        autorewrite with lang_core in *;
+        inversions.
+      autorewrite with lang_core in *;
+        inversions.
+      apply WfCutElim.invert_wf_term_con in H;
         break.
-        remember (con v l0) as e.
-        revert Heqe.
-        revert H0 case_match_eqn.
-        induction 1;
-          basic_goal_prep;
-          basic_core_crush.
-        eapply in_all_fresh_same in H0; eauto;
-          basic_core_crush.
+      clear H1 x.
+      eapply in_all_fresh_same in H; try apply case_match_eqn; eauto with lang_core.
+      autorewrite with term in *; break; subst.
+      use_rule_in_wf.
+      autorewrite with term lang_core utils in *; break; subst.
+      change (scon v0 l2 [/with_names_from x0 l0 /])
+        with (scon v0 l2) [/with_names_from x0 l0 /].
+      eapply wf_sort_subst_monotonicity; eauto.
+      apply wf_subst_from_wf_args; eauto.
+    Qed.
+
+    (*TODO: move to utils*)
+    Definition get_left {A B} (x : A + B) : option A :=
+      match x with inl x' => Some x' | _ => None end.
+
+    (*TODO: move to Rule.v*)
+    Definition is_sort x :=
+      match named_list_lookup_err l x with
+      | Some (sort_rule _ _) => true
+      | _ => false
+      end.
+
+    Variant lang_model_interprets_to
+      : V -> list (term + sort) -> term + sort -> Prop :=
+      | interprets_to_sort_of e t
+        : wf_term l [] e t -> lang_model_interprets_to sort_of [inl e] (inr t)
+      | interprets_to_sort f args t
+        : eq_sort l [] (scon f args) t ->
+          lang_model_interprets_to f (map inl args) (inr t)
+      | interprets_to_term f args e t
+        : eq_term l [] t (con f args) e ->
+          lang_model_interprets_to f (map inl args) (inl e).
+    
+    
+    Definition lang_model : model V :=
+      {|
+        domain := term + sort;
+        domain_eq := lang_model_eq;
+        interprets_to := lang_model_interprets_to;
+      |}.
+
+    
+    Lemma all2_model_eq_eq_args args args0 c'
+      : wf_args l [] args c' ->
+        wf_ctx l c' ->
+        all2 lang_model_eq (map inl args) (map inl args0) ->
+        eq_args l []  c' args args0.
+    Proof.
+      intro H; revert args0.
+      induction H;
+        destruct args0;
+        basic_goal_prep;
+        basic_utils_crush;
+        constructor;
+        safe_invert H1; eauto.
+      safe_invert H3.
+      eapply eq_term_conv; eauto.
+      eapply eq_sort_trans.
+      {
+        eapply term_sorts_eq; eauto; try constructor.
+        eauto with lang_core.
       }
       {
-        safe_invert H0. 
-        eapply in_all_fresh_same in case_match_eqn; eauto;
-          basic_core_crush.
+        eapply eq_sort_subst; eauto; try constructor.
+        1: exact H9.
+        apply eq_args_implies_eq_subst; eauto.
       }
     Qed.
 
-    (*
-    (*TODO: clean up*)
-    Definition interp_sort_of (x : list {x | lang_model_wf x}) : option {x | lang_model_wf x}.
-      refine (match x with [e] => _ | _ => None end).
-      pose proof (fun t => interp_sort_of'_wf _ t (proj2_sig e)).
-      revert H.
-      refine(
-      match interp_sort_of' (proj1_sig e) with
-      | Some x => fun H => Some (exist _ _ _)
-      | None => fun _ => None
-      end).
-      eapply H.
-      reflexivity.
-    Defined.
-    *)
     
-    (* TODO: how to handle the invariant that all contents are wf?
-       want sort_of to be meaningful.
-       Need a predicate that applies to all elts. Just use refinement type?
-     *)
-    Definition lang_model : model V :=
-      {|
-        domain := term;
-        (*TODO: necessary? domain_elt : domain -> Prop
-          arg. for: want egraph belonging to imply wfness?
-          arg against: equation by domain_eq implies this, so unnecessary
-         *)
-        domain_eq := lang_model_eq;
-        interpretation f args :=
-          (* TODO: need lemma that sort_of case wf*)
-          if eqb f sort_of then interp_sort_of args
-          else Some (con f args)
-      |}.
+    Lemma all2_lang_model_eq_inl args args2
+      : all2 lang_model_eq (map inl args) args2
+        -> exists args2', args2 = map inl args2'.
+    Proof.
+      revert args2;
+        induction args;
+        destruct args2;
+        basic_goal_prep;
+        basic_utils_crush.
+      { exists []; eauto. }
+      {
+        eapply IHargs in H1; break; subst.
+        safe_invert H0.
+        exists (e2::x); eauto.
+      }
+    Qed.
+    
+    Lemma all2_lang_model_eq_inl' args args2
+      : all2 lang_model_eq args2 (map inl args)
+        -> exists args2', args2 = map inl args2'.
+    Proof.
+      revert args2;
+        induction args;
+        destruct args2;
+        basic_goal_prep;
+        basic_utils_crush.
+      { exists []; eauto. }
+      {
+        eapply IHargs in H1; break; subst.
+        safe_invert H0.
+        exists (e1::x); eauto.
+      }
+    Qed.
 
+    Instance lang_model_eq_PER : PER lang_model_eq.
+    Proof.
+      constructor; repeat intro.
+      { inversion H; subst; econstructor; eauto using eq_term_sym, eq_sort_sym. }
+      {
+        inversion H; subst; inversion H0; subst;
+          econstructor; eauto using eq_sort_trans.
+        eapply eq_term_trans; eauto.
+        eapply eq_term_conv; eauto.
+        eapply eq_term_wf_r in H1;eauto; [|constructor].
+        eapply eq_term_wf_l in H3;eauto; [|constructor].
+        eapply term_sorts_eq; eauto; constructor.
+      }
+    Qed.
+
+    
+  Ltac transitive_extension :=
+    repeat first [apply Properties.map.extends_refl
+                 | eapply map_extends_trans;[ eassumption |] ].
+  Ltac extension_congruence Hext H H' :=
+    apply eq_of_eq_Some;
+    (eapply Hext in H' || (eapply Mmap_extends in H'; [| eauto | eauto | apply Hext]));
+    rewrite <- H, <- H'; reflexivity.
+  
+  Ltac get_ext_cong :=
+    repeat lazymatch goal with
+      | H : map.get ?i1 ?a = Some ?l1,
+          H' : map.get ?i2 ?a = Some ?l2 |- _ =>
+          let Hext := fresh "Hext" in
+          (assert (map.extends i1 i2) as Hext
+              by transitive_extension;
+           assert (l1 = l2) by extension_congruence Hext H H'; subst; clear H)
+          || 
+          (assert (map.extends i2 i1) as Hext
+              by transitive_extension;
+           assert (l1 = l2) by extension_congruence Hext H' H; subst; clear H')
+      | H : list_Mmap (map.get ?i1) ?a = Some ?l1,
+          H' : list_Mmap (map.get ?i2) ?a = Some ?l2 |- _ =>
+          let Hext := fresh "Hext" in
+          (assert (map.extends i1 i2) as Hext
+              by transitive_extension;
+           assert (l1 = l2) by extension_congruence Hext H H'; subst; clear H)
+          || 
+          (assert (map.extends i2 i1) as Hext
+              by transitive_extension;
+           assert (l1 = l2) by extension_congruence Hext H' H; subst; clear H')
+          
+      end.
+
+  Ltac lang_model_simp :=
+    get_ext_cong;
+    repeat lazymatch goal with
+      | H : lang_model_eq _ (inr _) |- _ =>
+          safe_invert H
+      | H : lang_model_eq (inr _) _ |- _ =>
+          safe_invert H
+      | |- lang_model_eq (inr _) (inr _) =>
+          constructor
+      | H : lang_model_interprets_to _ _ (inl _) |- _ =>
+          safe_invert H
+      | Hwf : wf_lang ?l,
+          H1 : In (?name, _) ?l,
+            H2 : In (?name, _) ?l |- _ =>
+          eapply in_all_fresh_same in H2; try apply H1; eauto with lang_core
+      | H : term_rule _ _ _ = term_rule _ _ _ |- _=> safe_invert H
+      end.
+
+
+    Instance lang_model_ok : model_ok _ lang_model.
+    Proof.
+      unfold lang_model.
+      constructor; cbn in *.
+      { apply lang_model_eq_PER. }
+      {
+        basic_goal_prep.
+        inversion H; subst; inversion H0; subst; clear H H0;
+          repeat basic_goal_prep.
+        {
+          inversion H; subst; clear H.
+          constructor.
+          pose proof H6 as H7.
+          eapply eq_term_wf_l in H6; eauto; try constructor.
+          eapply eq_term_wf_r in H7; eauto; try constructor.
+          eapply eq_sort_trans; eapply term_sorts_eq; eauto; try constructor.
+        }
+        {
+          destruct args; basic_goal_prep; try tauto.
+          destruct args; basic_goal_prep; try tauto.
+          eapply eq_sort_wf_l in H3; eauto using wf_ctx_nil.
+          safe_invert H3.
+          exfalso; eapply fresh_notin; eauto.
+        }
+        {
+          destruct args; basic_goal_prep; try tauto.
+          destruct args; basic_goal_prep; try tauto.
+          eapply eq_term_wf_l in H3; eauto using wf_ctx_nil.
+          apply WfCutElim.invert_wf_term_con in H3;
+            break.
+          exfalso; eapply fresh_notin; eauto.
+        }
+        {
+          destruct args; basic_goal_prep; try tauto.
+          destruct args; basic_goal_prep; try tauto.
+          eapply eq_sort_wf_l in H2; eauto using wf_ctx_nil.
+          safe_invert H2.
+          exfalso; eapply fresh_notin; eauto.
+        }
+        {
+          constructor.
+          eapply eq_sort_trans; eauto.
+          eapply eq_sort_wf_l in H3; eauto using wf_ctx_nil.
+          safe_invert H3.
+          eapply eq_sort_sym.
+          eapply eq_sort_trans; eauto.
+          eapply eq_sort_sym.
+          eapply sort_con_congruence; eauto.
+          eapply eq_sort_wf_l in H2; eauto using wf_ctx_nil.
+          safe_invert H2.
+          eapply in_all_fresh_same in H4; try apply H5; eauto with lang_core.
+          safe_invert H4.
+          apply all2_model_eq_eq_args; eauto.
+          use_rule_in_wf.
+          basic_core_crush.          
+        }
+        {
+          exfalso.
+          eapply eq_term_wf_l in H3; eauto using wf_ctx_nil.
+          eapply eq_sort_wf_l in H2; eauto using wf_ctx_nil.
+          repeat lazymatch goal with
+                 | H : wf_sort _ _ (scon _ _) |- _ => safe_invert H
+                 | H : wf_term _ _ (con _ _) _ |- _ =>
+                     apply WfCutElim.invert_wf_term_con in H;
+                     break
+                 end.
+          eapply in_all_fresh_same in H; try apply H5; eauto with lang_core;
+            congruence.
+        }
+        {
+          destruct args; basic_goal_prep; try tauto.
+          destruct args; basic_goal_prep; try tauto.
+          eapply eq_term_wf_l in H2; eauto using wf_ctx_nil.
+          repeat lazymatch goal with
+                 | H : wf_sort _ _ (scon _ _) |- _ => safe_invert H
+                 | H : wf_term _ _ (con _ _) _ |- _ =>
+                     apply WfCutElim.invert_wf_term_con in H;
+                     break
+                 end.
+          exfalso; eapply fresh_notin; eauto.
+        }
+        {
+          exfalso.
+          eapply eq_term_wf_l in H2; eauto using wf_ctx_nil.
+          eapply eq_sort_wf_l in H3; eauto using wf_ctx_nil.
+          repeat lazymatch goal with
+                 | H : wf_sort _ _ (scon _ _) |- _ => safe_invert H
+                 | H : wf_term _ _ (con _ _) _ |- _ =>
+                     apply WfCutElim.invert_wf_term_con in H;
+                     break
+                 end.
+          eapply in_all_fresh_same in H; try apply H5; eauto with lang_core;
+            congruence.
+        }
+        {
+          pose proof H2 as Hwf.
+          eapply eq_term_wf_l in Hwf; eauto using wf_ctx_nil.
+          pose proof H3 as Hwf'.
+          eapply eq_term_wf_l in Hwf'; eauto using wf_ctx_nil.
+          repeat lazymatch goal with
+                 | H : wf_sort _ _ (scon _ _) |- _ => safe_invert H
+                 | H : wf_term _ _ (con _ _) _ |- _ =>
+                     apply WfCutElim.invert_wf_term_con in H;
+                     break
+                 end.
+          eapply in_all_fresh_same in H; try apply H5; eauto with lang_core.
+          safe_invert H.
+          use_rule_in_wf.
+          autorewrite with lang_core utils in H; break.
+          etransitivity; [symmetry |];
+            try now (econstructor; eauto).
+          etransitivity; [symmetry |];
+            try now (econstructor; eauto).
+          symmetry.
+          econstructor.
+          eapply term_con_congruence; eauto.
+          eapply all2_model_eq_eq_args; eauto.
+        }
+      }
+      {        
+        basic_goal_prep.
+        inversion H; subst; clear H; basic_goal_prep;
+          repeat case_match; try tauto; break;        
+          repeat lazymatch goal with
+                 | H : lang_model_eq _ (inl _) |- _ => safe_invert H
+                 | H : lang_model_eq (inl _) _ |- _ => safe_invert H
+                 | H : lang_model_eq _ (inr _) |- _ => safe_invert H
+                 | H : lang_model_eq (inr _) _ |- _ => safe_invert H
+                 end.
+        {
+          econstructor.
+          eapply wf_term_conv; eauto with lang_core.
+          eapply eq_term_wf_l in H4;eauto; [|constructor].
+          eapply term_sorts_eq in H2; eauto; constructor.
+          eapply eq_sort_sym; eapply eq_sort_trans; eauto.
+        }
+        {
+          pose proof H0.
+          apply all2_lang_model_eq_inl in H0; break; subst.
+          pose proof H2.
+          eapply eq_sort_wf_l in H2; eauto using wf_ctx_nil.
+          safe_invert H2.
+          eapply interprets_to_sort.
+          eapply eq_sort_trans; eauto.
+          clear H3.
+          eapply eq_sort_trans; eauto.
+          eapply eq_sort_sym.
+          eapply sort_con_congruence; eauto.
+          eapply all2_model_eq_eq_args; eauto.
+          use_rule_in_wf; basic_core_crush.
+        }
+        {
+          pose proof H0.
+          apply all2_lang_model_eq_inl in H0; break; subst.
+          pose proof H2.
+          eapply eq_term_wf_l in H2; eauto using wf_ctx_nil.
+          repeat lazymatch goal with
+                 | H : wf_sort _ _ (scon _ _) |- _ => safe_invert H
+                 | H : wf_term _ _ (con _ _) _ |- _ =>
+                     apply WfCutElim.invert_wf_term_con in H;
+                     break
+                 end.
+          econstructor.
+          eapply eq_term_trans; eauto.
+          eapply eq_term_conv.
+          1: eapply eq_term_trans; try apply H0.
+          2:{
+            eapply eq_term_wf_l in H3; eauto using wf_ctx_nil.
+            eapply eq_term_wf_r in H0; eauto using wf_ctx_nil.
+            eapply term_sorts_eq; eauto using wf_ctx_nil.
+          }
+          eapply term_con_congruence; eauto.
+          { intuition eauto using eq_sort_sym. }
+          {
+            eapply eq_args_sym; try typeclasses eauto;
+              eauto using core_model_ok with lang_core.        
+            eapply eq_term_wf_l in H0; eauto using wf_ctx_nil. 
+            repeat lazymatch goal with
+                   | H : wf_sort _ _ (scon _ _) |- _ => safe_invert H
+                   | H : wf_term _ _ (con _ _) _ |- _ =>
+                       apply WfCutElim.invert_wf_term_con in H;
+                       break
+                   end.
+            lang_model_simp.
+            eapply all2_model_eq_eq_args; eauto.
+            use_rule_in_wf; basic_core_crush.
+          }          
+        }
+      }
+      {
+        destruct 1; basic_goal_prep; intuition eauto with lang_core.
+        {
+          eapply eq_sort_wf_l in H; eauto with lang_core; safe_invert H.
+          apply all_map; cbn.
+          clear H3.
+          induction H4; basic_goal_prep;
+            basic_core_crush.
+        }
+        {
+          eapply eq_term_wf_l in H; eauto with lang_core.
+          apply WfCutElim.invert_wf_term_con in H; break.
+          clear H H1.
+          apply all_map; cbn.
+          induction H0; basic_goal_prep;
+            basic_core_crush.
+        }
+      }
+      {
+        destruct 1; econstructor; basic_core_crush.
+        eapply eq_sort_refl.
+        eapply eq_term_wf_sort; eauto with lang_core.
+        eapply eq_term_refl; eauto.
+      }
+    Qed.          
+    
+(*
     Definition sort_of_term e :=
       match e with
       | con f s => scon f s
@@ -255,8 +650,8 @@ Section WithVar.
     Lemma lang_model_sort_of_sound e t
       : wf_term l [] e t ->
         forall t',
-        interp_sort_of [e] = Some t' ->
-        wf_term l [] e (sort_of_term t').
+        interp_sort_of [inl e] = Some (inr t') ->
+        wf_term l [] e t'.
     Proof using V_Eqb V_Eqb_ok V_default wfl.
       clear succ.
       induction 1;
@@ -272,8 +667,12 @@ Section WithVar.
       unfold sort_of_term; cbn.
       change (scon v l0 [/with_names_from c' s /])
         with (scon v l0) [/with_names_from c' s /].
+      safe_invert H1.
+      change (scon v l0 [/with_names_from c' s /])
+        with (scon v l0) [/with_names_from c' s /].
       eapply wf_term_by; eauto.
     Qed.
+*)
       
     (*
     Context (le_V : V -> V -> Prop)
@@ -417,57 +816,6 @@ Section WithVar.
     Context (supremum_le : forall l x, In x l -> le_V x (supremum l)).
      *)
 
-    Lemma lang_model_eq_PER :  RelationClasses.PER lang_model_eq.
-    Proof.
-      constructor; repeat intros ?.
-      all: repeat match goal with
-             | H : lang_model_eq _ _ |- _ =>
-                 inversion H; clear H; subst
-             end;
-        repeat case_match;
-        try tauto.
-      all: try (eapply lm_eq_sorts; cbn; now eauto using eq_sort_sym, eq_sort_trans).
-      all: try (eapply lm_eq_terms; cbn; now eauto using eq_term_sym, eq_term_trans).
-      {
-        eapply lm_eq_terms.
-        eapply eq_term_trans; eauto.
-        eapply eq_term_conv; eauto.
-        eapply eq_term_wf_r in H0; eauto with lang_core.
-        eapply eq_term_wf_l in H1; eauto with lang_core.
-        eapply term_sorts_eq; eauto with lang_core.
-      }      
-      {
-        exfalso.
-        eapply eq_term_wf_l in H1; eauto with lang_core.
-        eapply wf_con_rule_in in H1; eauto.
-        eapply eq_sort_wf_r in H0; eauto with lang_core.
-        eapply wf_scon_rule_in in H0; eauto.
-        break.
-        eapply in_all_fresh_same in H0; try exact H;
-          basic_core_crush.
-      }
-      
-      {
-        exfalso.
-        eapply eq_term_wf_r in H0; eauto with lang_core.
-        eapply wf_con_rule_in in H0; eauto.
-        eapply eq_sort_wf_l in H1; eauto with lang_core.
-        eapply wf_scon_rule_in in H1; eauto.
-        break.
-        eapply in_all_fresh_same in H0; try exact H;
-          basic_core_crush.
-      }
-    Qed.
-
-    Lemma interp_sort_of_unary args d
-      : interp_sort_of args = Some d ->
-        args = [hd default args].
-    Proof.
-      unfold interp_sort_of.
-      basic_goal_prep.
-      repeat (case_match; basic_goal_prep).
-      all:cbv in *; congruence.
-    Qed.
 
     Lemma wf_var_in
       : (forall c s,
@@ -480,12 +828,13 @@ Section WithVar.
                wf_args l c l0 c0 ->
                forall x, In x (fv_args l0) -> In x (map fst c)).
     Proof.
-      clear succ.
+      clear succ lt_succ.
       eapply wf_judge_ind;
         basic_goal_prep;
         basic_utils_crush.
     Qed.
-      
+
+    (*
     Lemma lang_model_no_vars v
       : lang_model_eq {{e v}} {{e v}} <-> False.
     Proof.
@@ -500,6 +849,7 @@ Section WithVar.
         basic_utils_crush.
     Qed.
     Hint Rewrite lang_model_no_vars : lang_core.
+*)
 
     
     Lemma wf_term_con_inv' c e t
@@ -508,7 +858,7 @@ Section WithVar.
         exists c' args' t', In (f,term_rule c' args' t') l
                             /\ wf_args l c args c'.
     Proof using.
-      clear succ.
+      clear succ lt_succ V_default lt lt_asymmetric lt_trans.
       induction 1;
         basic_goal_prep;
         basic_core_crush.
@@ -520,105 +870,965 @@ Section WithVar.
                             /\ wf_args l c args c'.
     Proof. eauto using wf_term_con_inv'. Qed.
 
+    (*TODO: move*)    
+    Arguments interprets_to {symbol}%type_scope m f args%list_scope d.
     
-      
-    Lemma lang_model_term e1 e2 t
-      : wf_term l [] e2 t ->
-        lang_model_eq e1 e2 ->
-        exists t, eq_term l [] t e1 e2.
-    Proof using V_Eqb_ok V_default wfl.
-      clear succ.
-      intro H; revert e1;
-        induction 1;
-        basic_goal_prep;
-        repeat case_match;
-        basic_utils_crush.
-      exfalso.
-      eapply eq_sort_wf_r in H0; basic_core_crush.
-      safe_invert H0.
-      eapply wf_term_con_inv in H.
-      basic_goal_prep.
-      eapply in_all_fresh_same in H4; try exact H;
-        basic_core_crush.
-    Qed.
-    
-    Lemma all_lang_model_args args args' c'
-      : wf_args l [] args' c' ->
-        all2 lang_model_eq args args' ->
-        all2 (fun e1 e2 => exists t, eq_term l [] t e1 e2) args args'.
-    Proof using V_Eqb_ok V_default wfl.
-      clear succ.
-      intro H.
-      revert args.
-      induction H; destruct args;
-        basic_goal_prep;
-        basic_core_crush.
-      eapply lang_model_term; eauto.
-    Qed.
-
-    
-    Lemma all2_eq_to_eq_args c args args' c'
-      : wf_ctx l c ->
-        wf_args l c args' c' ->
-        all2 (fun e1 e2 : term => exists t : sort, eq_term l c t e1 e2) args args' ->
-        eq_args l c c' args args'.
-    Proof using V_Eqb_ok V_default wfl.
-      clear succ.
-      intros wfc H.
-      revert args.
-      induction H; destruct args;
-        basic_goal_prep;
-        basic_core_crush.
-      assert (eq_sort l c x t [/with_names_from c' s /]).
-      {
-        eapply term_sorts_eq; eauto.
-        basic_core_crush.
-      }
-      eapply eq_term_conv; eauto.
-    Qed.
-
-    
-    Lemma term_sort_impossible_helper c t f args args'
-      : wf_lang l ->
-        wf_term l c (con f args') t ->
-        wf_sort l c (scon f args) ->
-        False.
-    Proof using V_Eqb_ok V_default wfl.
-      clear succ.
-      intros.
-      eapply wf_term_con_inv in H0.
-      basic_goal_prep.
-      safe_invert H1.
-      eapply in_all_fresh_same in H6; try exact H0;
-        basic_core_crush.
-    Qed.
-    #[local] Hint Resolve term_sort_impossible_helper : lang_core.
-
-    Notation egraph_sound_for_interpretation :=
-      (egraph_sound_for_interpretation _ succ _ _ _ _ _).
-
-    Definition interp_ordered {A B} (i i' : A -> option B) :=
-      forall x, match i x with
-                | Some y => i' x = Some y
-                | None => True
-                end.
+    Definition args_in_instance (args : list _)
+      (i : V_map lang_model.(domain _)) (r : list V) : Prop :=
+      list_Mmap (map.get i) r <$> (fun dl => all2 lang_model.(domain_eq _) dl (map inl args)).
+                                   (*
+      all2 (fun pr ps => fst pr = fst ps
+                         /\ option_relation lang_model.(domain_eq _)
+                               (map.get i (snd pr)) (Some (inl (snd ps))))
+        r s.
+*)
 
     (*
-    Lemma sequent_of_states_sound A B m i1 s1 Post_i Post Post2
-      (s2 : A -> state (instance _) B) i3
-      : state_sound_for_model m i1 s1 Post_i Post ->
+    Definition subst_of_rename_interp r (i : V_map lang_model.(domain _)) : subst :=
+      named_map (fun x => match map.get i x with
+                          | Some (inl e) => e
+                          | _ => default
+                          end)
+        r.
+     *)
+
+    
+  (*TODO: move to definition site*)
+  Arguments monotone1 {idx}%type_scope {idx_map}%function_scope {A B}%type_scope P%function_scope.
+  
+  Lemma args_in_instance_monotone s
+    : monotone1 (args_in_instance s).
+  Proof.
+    unfold args_in_instance.
+    repeat intro.
+    iss_case.
+    eapply Mmap_extends in Hma; eauto.
+    rewrite Hma.
+    cbn.
+    auto.
+  Qed.
+
+  (*
+  Lemma Mmap_subst_in_inst i a s (c' : ctx)
+    : option_relation (all2 lang_model.(domain_eq _))
+        (list_Mmap (map.get i) a)
+        (Some (map inl s)) ->
+      args_in_instance s i a.
+  Proof.
+    unfold assign_subst_in_instance.
+    revert c' s;
+      induction a;
+      destruct s;
+      destruct c';
+      basic_goal_prep;
+      repeat (inversions; try case_match;cbn in * );
+      safe_invert H;
+      intuition eauto.
+    econstructor; eauto.
+  Qed.
+*)
+
+  Lemma interpret_sort_of a o
+    : lang_model_interprets_to sort_of [a] o <->
+        exists e t, a = inl e /\ o = inr t /\  wf_term l {{c }} e t.
+  Proof.
+    split.
+    2:{ basic_goal_prep; subst; econstructor; eauto. }
+    inversion 1; subst.
+    { eexists; eexists; intuition eauto. }
+    all: exfalso.
+    {
+      eapply eq_sort_wf_l in H2; eauto with lang_core.
+      safe_invert H2.
+      eapply fresh_notin in H5; eauto using sort_of_fresh; tauto.
+    }
+    {
+      eapply eq_term_wf_l in H2; eauto with lang_core.
+      apply WfCutElim.invert_wf_term_con in H2; break.
+      eapply fresh_notin in H1; eauto using sort_of_fresh; tauto.
+    }
+  Qed.    
+  
+
+  
+  
+  Lemma map_injective A B (f : A -> B)
+    : (forall x y, f x = f y -> x = y) ->
+      forall l1 l2, map f l1 = map f l2 -> l1 = l2.
+  Proof.
+    induction l1; destruct l2;
+      basic_goal_prep;
+      repeat case_match; basic_utils_crush.
+  Qed.
+  
+    Lemma interprets_to_term_rule name c' args t s s1
+      : In (name, term_rule c' args t) l ->
+        lang_model_interprets_to name s s1 ->
+        exists e x, s = map inl x
+                    /\ s1 = inl e
+                  /\ eq_term l {{c }} t[/with_names_from c' x/] (con name x) e.
+    Proof.
+      inversion 2; subst.
+      { exfalso; eapply fresh_notin; eauto. }
+      {
+        eapply eq_sort_wf_l in H1; eauto with lang_core.
+        safe_invert H1.
+        eapply in_all_fresh_same in H5; try apply H; eauto with lang_core.
+        congruence.
+      }
+      {
+        eexists;eexists; intuition eauto.
+        pose proof H1.
+        eapply eq_term_wf_l in H1; eauto with lang_core.
+        eapply WfCutElim.invert_wf_term_con in H1; break.
+        lang_model_simp.
+        apply map_injective in H5; [ subst | intros; congruence].
+        intuition subst; eauto.
+        eapply eq_term_conv; eauto.
+        eapply eq_sort_sym; eapply eq_sort_trans; try eassumption.
+        eapply term_sorts_eq; eauto with lang_core.
+        all: eapply eq_term_wf_r; eauto with lang_core.
+      }
+    Qed.
+    
+  
+    Lemma interprets_to_sort_rule name c' args x s1
+      : In (name, sort_rule c' args) l ->
+        lang_model_interprets_to name (map inl x) s1 ->
+        exists t, s1 = inr t
+                  /\ eq_sort l {{c }} (scon name x) t.
+    Proof.
+      inversion 2; subst.
+      { exfalso; eapply fresh_notin; eauto. }
+      2:{
+        eapply eq_term_wf_l in H3; eauto with lang_core.
+        eapply WfCutElim.invert_wf_term_con in H3; break.
+        eapply in_all_fresh_same in H2; try apply H; eauto with lang_core.
+        congruence.
+      }
+      {
+        apply map_injective in H1; subst.
+        2: intros; congruence.
+        eexists; intuition eauto.
+      }
+    Qed.     
+
+  End WithLang.
+
+  
+  Ltac transitive_extension :=
+    repeat first [apply Properties.map.extends_refl
+                 | eapply map_extends_trans;[ eassumption |] ].
+  Ltac extension_congruence Hext H H' :=
+    apply eq_of_eq_Some;
+    (eapply Hext in H' || (eapply Mmap_extends in H'; [| eauto | eauto | apply Hext]));
+    rewrite <- H, <- H'; reflexivity.
+  
+  Ltac get_ext_cong :=
+    repeat lazymatch goal with
+      | H : map.get ?i1 ?a = Some ?l1,
+          H' : map.get ?i2 ?a = Some ?l2 |- _ =>
+          let Hext := fresh "Hext" in
+          (assert (map.extends i1 i2) as Hext
+              by transitive_extension;
+           assert (l1 = l2) by extension_congruence Hext H H'; subst; clear H)
+          || 
+          (assert (map.extends i2 i1) as Hext
+              by transitive_extension;
+           assert (l1 = l2) by extension_congruence Hext H' H; subst; clear H')
+      | H : list_Mmap (map.get ?i1) ?a = Some ?l1,
+          H' : list_Mmap (map.get ?i2) ?a = Some ?l2 |- _ =>
+          let Hext := fresh "Hext" in
+          (assert (map.extends i1 i2) as Hext
+              by transitive_extension;
+           assert (l1 = l2) by extension_congruence Hext H H'; subst; clear H)
+          || 
+          (assert (map.extends i2 i1) as Hext
+              by transitive_extension;
+           assert (l1 = l2) by extension_congruence Hext H' H; subst; clear H')
+          
+      end.
+
+  Ltac lang_model_simp :=
+    get_ext_cong;
+    repeat lazymatch goal with
+      | H : lang_model_eq _ (inr _) |- _ =>
+          safe_invert H
+      | H : lang_model_eq (inr _) _ |- _ =>
+          safe_invert H
+      | |- lang_model_eq (inr _) (inr _) =>
+          constructor
+      | H : lang_model_interprets_to _ _ (inl _) |- _ =>
+          safe_invert H
+      | Hwf : wf_lang ?l,
+          H1 : In (?name, _) ?l,
+            H2 : In (?name, _) ?l |- _ =>
+          eapply in_all_fresh_same in H2; try apply H1; eauto with lang_core
+      | H : term_rule _ _ _ = term_rule _ _ _ |- _=> safe_invert H
+      end.
+
+  
+  Lemma args_in_instance_length l s0 i' a
+    : args_in_instance l s0 i' a ->
+      length a = length s0.
+  Proof.
+    unfold args_in_instance; basic_goal_prep.
+    iss_case.
+    apply PosListMap.all2_len in H.
+    apply TrieMap.list_Mmap_length in Hma.
+    basic_utils_crush.
+    congruence.
+  Qed.
+
+  
+  Lemma args_in_instance_in l s i c n e x r
+    : args_in_instance l s i (map snd r) ->
+      wf_args l {{c }} s c ->
+      map fst c = map fst r ->
+      all_fresh c ->
+      In (n,e) (with_names_from c s) ->
+      In (n,x) r ->
+      exists d, map.get i x = Some d
+                /\ lang_model_eq l d (inl e).
+  Proof.
+    unfold args_in_instance.
+    intros H Hi.
+    iss_case.
+    generalize dependent l0.
+    revert r.
+    induction Hi;
+      basic_goal_prep;
+      try tauto.
+    destruct l0; basic_goal_prep; try tauto.
+    destruct r; basic_goal_prep; repeat (case_match; try congruence; try tauto);try tauto.
+    inversions.
+    assert (fresh v r).
+    {
+      unfold fresh in *.
+      congruence.
+    }
+    eqb_case v n; intuition subst; eauto.
+    {
+      exfalso.
+      rewrite <- combine_map_fst_is_with_names_from in *.
+      apply in_combine_l in H8.
+      eauto.
+    }
+    {
+      exfalso.
+      rewrite <- combine_map_fst_is_with_names_from in *.
+      apply pair_fst_in in H8.
+      eauto.
+    }
+  Qed.
+  
+  Lemma args_in_instance_cons l (es : list term) i aa (e : term) a
+    : args_in_instance l es i aa ->
+      map.get i a <$> (fun d => domain_eq V (lang_model l) d (inl e)) ->
+      args_in_instance l (e::es) i (a::aa).
+  Proof.
+    unfold args_in_instance;
+      intros; repeat iss_case.
+    cbn in *.
+    rewrite Hma.
+    rewrite Hma0.
+    cbn.
+    intuition auto.
+  Qed.
+    
+  Section __.
+    Context (X : Type) `{analysis V V X} (with_sorts : bool) (l l1 : lang) (sort_of_fresh : fresh sort_of l).
+    Context (add_open_sort : named_list V -> Term.sort V -> state (instance X) V).
+    Context (add_open_sort_sound
+              : forall l2 t s c' r' i,
+                wf_lang l2 ->
+                length l2 < length l1 ->
+                incl l2 l1 ->
+                wf_args l [] s c' ->
+                wf_ctx l2 c' ->
+                wf_sort l2 c' t ->
+                map fst c' = map fst r' ->
+                args_in_instance l s i (map snd r') ->
+                state_sound_for_model (lang_model l) i
+                  (add_open_sort r' t)
+                  (fun i' x => option_relation (lang_model l).(domain_eq _)
+                               (map.get i' x) (Some (inr t[/with_names_from c' s/])))).
+    Context s c 
+      (Hsubst : wf_args l [] s c)
+      (Hctx : wf_ctx l1 c)
+      (Hwf : wf_lang l)
+      (Hwf' : wf_lang l1)
+      (Hl_sub : incl l1 l).
+    
+
+    Lemma add_open_sound
+      : (forall e t, wf_term l1 c e t ->
+                     forall i r, args_in_instance l s i (map snd r) ->
+                                 map fst c = map fst r ->
+                                state_sound_for_model (lang_model l) i
+                                  (add_open_term' succ sort_of l with_sorts add_open_sort r e)
+                                  (fun i x => option_relation (lang_model l).(domain_eq _)
+                                              (map.get i x) (Some (inl e[/with_names_from c s/]))))
+        /\ (forall args c', wf_args l1 c args c' ->
+                     forall i r, args_in_instance l s i (map snd r) ->
+                                 map fst c = map fst r ->
+                                       state_sound_for_model (lang_model l) i
+                                         (list_Mmap (add_open_term' succ sort_of l
+                                                       with_sorts add_open_sort r) args)
+                                         (fun i arg_ids =>
+                                            args_in_instance l args[/with_names_from c s/] i arg_ids)).
+    Proof.      
+      pose proof (lang_model_eq_PER _ Hwf) as HPER.
+      apply WfCutElim.wf_cut_ind; intros;
+        cbn [add_open_term' list_Mmap]; eauto.
+      {
+        pose proof H0.
+        eapply Hl_sub in H0;
+          eapply all_fresh_named_list_lookup_err_in in H0; eauto with lang_core.
+        rewrite <- H0; clear H0.
+        ssm_bind.
+        ssm_bind.
+        {
+          pose proof H6 as Ha.
+          unfold args_in_instance in Ha.
+          iss_case.
+          pose proof Ha; apply all2_lang_model_eq_inl' in Ha; break; subst.
+          1:eapply hash_entry_sound; eauto using lang_model_ok;
+          cbn beta in *.
+          {
+            eapply lang_model_ok; eauto.
+            {
+              cbn in *.
+              refine (interprets_to_term _ _ _ _ _ _).
+              apply eq_term_refl.
+              econstructor; eauto.
+              {
+                eapply wf_args_subst_monotonicity; auto.
+                { eapply wf_args_lang_monotonicity; eauto. }
+                { eapply wf_ctx_lang_monotonicity; eauto. }
+                {
+                  use_rule_in_wf;
+                    basic_core_crush.
+                }
+                {
+                  eapply wf_subst_from_wf_args; eauto.
+                }
+              }
+            }
+            { eapply all2_Symmetric in H7; try apply lang_model_eq_PER; eauto. }
+            {
+              cbn.
+              refine (lm_eq_terms _ _ _ _ _).
+              eapply eq_term_refl.
+              eapply wf_term_by.
+              { apply Hl_sub; eauto. }             
+              eapply wf_args_subst_monotonicity; auto.
+              { eapply wf_args_lang_monotonicity; eauto. }
+              { eapply wf_ctx_lang_monotonicity; eauto. }
+              {
+                use_rule_in_wf;
+                    basic_core_crush.
+              }
+              {
+                eapply wf_subst_from_wf_args; eauto.
+              }
+            }
+          }
+        }
+        case_match.
+        {
+          use_rule_in_wf.
+          autorewrite with lang_core utils in H9; break.
+          pose proof H5; apply in_split in H5; break; subst.
+          ssm_bind.
+          {
+            eapply add_open_sort_sound.
+            8:{
+              rewrite map_combine_snd.
+              1: eapply args_in_instance_monotone; now eauto.
+              apply args_in_instance_length in H6.
+              rewrite H6.
+              autorewrite with utils.
+              erewrite wf_args_length_eq; try eassumption.
+              unfold apply_subst; cbn; unfold args_subst; cbn.
+              basic_utils_crush.
+            }
+            4:{       
+              eapply wf_args_subst_monotonicity; auto.
+              { eapply wf_args_lang_monotonicity; eauto. }
+              { eapply wf_ctx_lang_monotonicity; eauto. }
+              { eapply wf_ctx_lang_monotonicity; eauto. }
+              {
+                eapply wf_subst_from_wf_args; eauto.
+              }
+            }
+            5:{
+              eapply wf_lang_tail in Hwf'; safe_invert Hwf'.
+              safe_invert H17.
+              autorewrite with utils in *.
+              exact H19.
+            }
+            {
+              eapply wf_lang_tail in Hwf'; safe_invert Hwf'; eauto.
+            }
+            {
+              autorewrite with utils list; cbn.
+              Lia.lia.
+            }
+            {
+              basic_utils_crush.
+            }
+            {
+              eapply wf_lang_tail in Hwf'; safe_invert Hwf'.
+              safe_invert H17.
+              autorewrite with utils in *; auto.
+            }
+            {
+              rewrite map_combine_fst; auto.
+              autorewrite with utils list; cbn.
+              apply args_in_instance_length in H6.
+              rewrite H6.
+              autorewrite with utils.
+              erewrite wf_args_length_eq; try eassumption.
+              unfold apply_subst; cbn; unfold args_subst; cbn.
+              basic_utils_crush.
+            }
+          }
+          unfold atom_sound_for_model in H8;
+            repeat iss_case; cbn beta in *.
+          eapply interprets_to_term_rule in H8; eauto; break; subst.
+          ssm_bind.
+          {
+            eapply hash_entry_sound; eauto using lang_model_ok;
+            cbn beta in *.
+            { cbn in *. apply H5 in Hma0; rewrite Hma0; reflexivity. }
+            {
+              cbn in *.
+              apply interpret_sort_of; eauto.
+              repeat eexists; intuition eauto.
+              eapply eq_term_wf_r; eauto with lang_core.
+            }
+          }
+          ssm_bind.
+          1:eapply union_sound; eauto.
+          { apply lang_model_ok; eauto. }
+          {
+            (*pose proof (eq_sound_for_model_PER _ _ V_map (lang_model l) (H0:=lang_model_ok l sort_of_fresh Hwf)).*)
+            cbn in *.
+            unfold option_relation in *; cbn in *.
+            case_match; try congruence.
+            unfold eq_sound_for_model.
+            cbn in *.
+            eapply H8 in case_match_eqn; rewrite case_match_eqn.
+            cbn.
+            unfold atom_sound_for_model in H14.
+            cbn in *.
+            repeat iss_case.
+            case_match; try congruence.
+            inversions.
+            cbn.
+            apply interpret_sort_of in H14; break; subst; eauto.
+            etransitivity; try eassumption.
+            lang_model_simp.
+            safe_invert H14.
+            etransitivity.
+            2:{
+              constructor.
+              eapply term_sorts_eq; auto with lang_core.
+              2: eassumption.
+              eapply eq_term_wf_r; eauto with lang_core.
+            }
+            constructor.
+            eapply eq_sort_subst; eauto.
+            {
+              eapply eq_sort_refl.
+              apply Hl_sub in H12; use_rule_in_wf;
+                basic_core_crush.
+            }
+            2:{
+              apply Hl_sub in H12; use_rule_in_wf;
+                basic_core_crush.
+            }
+            {
+              apply eq_args_implies_eq_subst; eauto.
+              unfold args_in_instance in H6.
+              iss_case.
+              eapply Mmap_extends in Hma1; eauto.
+              cbn in *.
+              rewrite Hma in Hma1.
+              inversions.
+              eapply all2_Symmetric in H6; try typeclasses eauto.
+              eapply all2_model_eq_eq_args in H6; eauto.
+              2:{
+                eapply Hl_sub in H12;
+                  use_rule_in_wf.
+                  autorewrite with lang_core utils in *; break; eauto.
+              }
+              {
+                eapply wf_args_subst_monotonicity; eauto with lang_core.
+                { eapply wf_args_lang_monotonicity; eauto. }
+                { eapply wf_ctx_lang_monotonicity; eauto. }
+                
+                eapply wf_subst_from_wf_args; eauto.
+              }
+            }
+          }
+          apply ret_sound_for_model'.
+          repeat basic_goal_prep; subst.
+          unfold  option_relation.
+          cbn.
+          apply H5 in Hma0.
+          apply H8 in Hma0.
+          rewrite Hma0.
+          change (map (term_var_map (term_subst_lookup (with_names_from c s))) s0)
+            with s0[/(with_names_from c s)/].
+          symmetry.
+          etransitivity; [| econstructor; eauto].
+          econstructor.
+          eapply term_con_congruence; eauto.
+          unfold args_in_instance in H6.
+          iss_case.
+          eapply Mmap_extends in Hma1; eauto.
+          cbn in *.
+          rewrite Hma in Hma1.
+          inversions.
+          eapply all2_Symmetric in H6; try typeclasses eauto.
+          eapply all2_model_eq_eq_args in H6; eauto.
+          2:{
+            eapply Hl_sub in H12;
+              use_rule_in_wf.
+            autorewrite with lang_core utils in *; break; eauto.
+          }
+          {
+            eapply wf_args_subst_monotonicity; eauto with lang_core.
+            { eapply wf_args_lang_monotonicity; eauto. }
+            { eapply wf_ctx_lang_monotonicity; eauto. }
+            
+            eapply wf_subst_from_wf_args; eauto.
+          }
+        }
+        {
+          apply ret_sound_for_model'.
+          repeat basic_goal_prep; subst.
+          unfold option_relation.
+          cbn.
+          unfold atom_sound_for_model in H8.
+          repeat iss_case.
+          cbn in *.
+          eapply interprets_to_term_rule in H8; eauto.
+          break; subst.
+          change (map (term_var_map (term_subst_lookup (with_names_from c s))) s0)
+            with s0[/(with_names_from c s)/].
+          symmetry.
+          etransitivity; [| econstructor; eauto].
+          econstructor.
+          eapply term_con_congruence; eauto.
+          unfold args_in_instance in H6.
+          iss_case.
+          eapply Mmap_extends in Hma1; eauto.
+          cbn in *.
+          rewrite Hma in Hma1.
+          inversions.
+          eapply all2_Symmetric in H6; try typeclasses eauto.
+          eapply all2_model_eq_eq_args in H6; eauto.
+          2:{
+            eapply Hl_sub in H5;
+              use_rule_in_wf.
+            autorewrite with lang_core utils in *; break; eauto.
+          }
+          {
+            eapply wf_args_subst_monotonicity; eauto with lang_core.
+            { eapply wf_args_lang_monotonicity; eauto. }
+            { eapply wf_ctx_lang_monotonicity; eauto. }
+            eapply wf_subst_from_wf_args; eauto.
+          }
+        }
+      }
+      {
+        apply ret_sound_for_model'.
+        unfold option_relation.
+        assert (exists x, In (n,x) r).
+        {
+          eapply pair_fst_in_exists.
+          rewrite <- H2.
+          eapply pair_fst_in; eauto.
+        }
+        break.
+        erewrite named_list_lookup_in; eauto.
+        {
+          assert (exists e,  In (n, e) (with_names_from c s)).
+          {
+            apply pair_fst_in_exists.
+            rewrite map_fst_with_names_from;
+              basic_core_crush.
+          }
+          break.
+          eapply args_in_instance_in in H3; eauto with model.
+          break.
+          rewrite H3.
+          cbn.
+          etransitivity; try eassumption.
+          econstructor.
+          replace x0 with (term_subst_lookup (with_names_from c s) n).
+          {
+            eapply eq_term_refl.
+            eapply wf_term_lookup; eauto.
+            1:eapply wf_subst_from_wf_args; eauto.
+            { eapply wf_ctx_lang_monotonicity; eauto. }
+          }            
+          apply named_list_lookup_in; eauto.
+          rewrite map_fst_with_names_from.
+          2:{ basic_core_crush. }
+          { apply NoDup_fresh; eauto with model. }
+        }            
+        { rewrite <- H2; apply NoDup_fresh; eauto with model. }
+      }
+      {
+        apply ret_sound_for_model'.
+        cbn in *; auto.
+      }
+      {
+        ssm_bind.
+        ssm_bind.
+        {
+          eapply H1; eauto.
+          eapply args_in_instance_monotone; eauto.
+        }
+        apply ret_sound_for_model'.
+        cbn in *; auto.
+        apply args_in_instance_cons; eauto.
+        unfold option_relation in *.
+        case_match; try congruence.
+        apply H8 in case_match_eqn; cbn in *; rewrite case_match_eqn.
+        cbn.
+        apply H7.
+      }        
+    Qed.
+
+  End __.
+
+  (*
+  Lemma assign_subst_subst l i r c s s' c'
+    : args_in_instance l s i r ->
+      wf_subst l c s' c' ->
+      assign_subst_in_instance l s' [/s /] i r.
+  Proof.
+    unfold assign_subst_in_instance.
+    (*    TODO: false! needs a different r! (of course*)
+    Abort.
+   *)
+
+    Lemma add_open_sort'_sound l l' with_sorts r s c t fuel (sort_of_fresh : fresh sort_of l)
+      : wf_lang l ->
+        length l' < fuel ->
+        incl l' l ->
+        wf_lang l' ->
+        wf_args l [] s c ->
+        wf_ctx l' c ->
+        wf_sort l' c t ->
+        forall i,
+        args_in_instance l s i (map snd r) ->
+        map fst c = map fst r ->
+        state_sound_for_model (lang_model l) i
+          (add_open_sort' succ sort_of l with_sorts fuel r t)
+          (fun i x => option_relation (lang_model l).(domain_eq _)
+                      (map.get i x) (Some (inr t[/with_names_from c s/]))).
+    Proof.
+      revert l' r s c t.
+      induction fuel;
+        cbn [add_open_sort'].
+      { intros; Lia.lia. }
+      {
+        intros.
+        destruct t.
+        safe_invert H5.
+        apply in_split in H11; break; subst.
+        ssm_bind.
+        {
+          pose proof H2 as Htail.
+          eapply wf_lang_tail in Htail; safe_invert Htail; eauto.
+          autorewrite with lang_core utils in *; break.
+          eapply add_open_sound.
+          1: auto.
+          1:intros; eapply IHfuel; auto.
+          11: now eauto.
+          10:now eauto.
+          5: now eauto.          
+          all: eauto.
+          {
+            repeat rewrite length_app, length_cons in *.
+            Lia.lia.
+          }
+          { eapply incl_tran; eassumption. }
+        }
+        cbn beta in *.
+        pose proof H8 as Ha.
+        unfold args_in_instance in Ha.
+        iss_case.
+        pose proof Ha; apply all2_lang_model_eq_inl' in Ha; break; subst.
+        eapply state_sound_for_model_wkn.
+        1:eapply hash_entry_sound; eauto using lang_model_ok;
+        cbn beta in *.
+        {
+          cbn in *.
+          refine (interprets_to_sort _ _ _ _ _).
+          apply eq_sort_refl.
+          econstructor; eauto.
+          {
+            eapply H1; basic_utils_crush.
+          }
+          {
+            eapply eq_args_wf_l; eauto with lang_core.
+            2: eapply eq_args_sym; eauto  with lang_core.
+            1,3:assert (In (v, sort_rule c' args) l)
+                by (apply H1; basic_utils_crush);
+              use_rule_in_wf; basic_core_crush.
+            1: apply core_model_ok; eauto.
+            eapply all2_Symmetric in H9; try apply lang_model_eq_PER; eauto.
+            eapply all2_model_eq_eq_args; eauto.
+            2:assert (In (v, sort_rule c' args) l)
+                by (apply H1; basic_utils_crush);
+              use_rule_in_wf; basic_core_crush.
+            eapply wf_args_subst_monotonicity; eauto with lang_core.
+            { eapply wf_args_lang_monotonicity; eauto. }
+            { eapply wf_ctx_lang_monotonicity; eauto. }
+            {
+              assert (In (v, sort_rule c' args) l)
+                by (apply H1; basic_utils_crush).
+              use_rule_in_wf;
+                basic_core_crush.
+            }
+            {
+              eapply wf_subst_from_wf_args; eauto.
+            }
+          }
+        }
+        cbn beta; intros; break.
+        unfold option_relation; cbn.
+        unfold atom_sound_for_model in H11; cbn in H11.
+        eapply Mmap_extends in Hma; eauto; cbn in *.
+        rewrite Hma in H11; cbn in *.
+        iss_case.
+        pose proof H1.
+        eapply interprets_to_sort_rule in H11; eauto; break.
+        2:apply H1; basic_utils_crush.
+        subst.
+        pose proof (lang_model_eq_PER _ H).
+        etransitivity; [symmetry; constructor; eauto|].
+        symmetry.
+        constructor.
+        eapply sort_con_congruence; eauto.
+        { apply H1; basic_utils_crush. }
+        eapply all2_model_eq_eq_args; eauto.
+        2:assert (In (v, sort_rule c' args) l)
+                by (apply H1; basic_utils_crush);
+              use_rule_in_wf; basic_core_crush.
+        2:{ apply all2_Symmetric; eauto; apply H11. }
+        eapply wf_args_subst_monotonicity; eauto.
+        { eapply wf_args_lang_monotonicity; eauto. }
+        { eapply wf_ctx_lang_monotonicity; eauto. }
+        {
+          assert (In (v, sort_rule c' args) l)
+            by (apply H1; basic_utils_crush).
+          use_rule_in_wf;
+            basic_core_crush.
+        }
+        {
+          eapply wf_subst_from_wf_args; eauto.
+        }
+      }
+    Qed.
+  (*
+    Lemma add_open_term'_sound e t
+      : wf_term l c e t ->
+        forall i', map.extends i' i ->
+        state_sound_for_model lang_model i'
+          (add_open_term' succ sort_of l with_sorts add_open_sort r e)
+          (fun i x => map.get i x = Some (inl e[/s/])).
+    Proof.
+      intro Hwf.
+      pattern e.
+      pattern t.
+      revert e t Hwf.
+      apply WfCutElim.wf_term_cut_ind; intros;
+        cbn [add_open_term'].
+      {
+        pose proof H0;
+          eapply all_fresh_named_list_lookup_err_in in H0; eauto with lang_core.
+        rewrite <- H0; clear H0.
+        ssm_bind.
+        {
+          eapply state_sound_for_model_Mmap_dep.
+          {
+            
+            
+          TODO: should I just write the mutual one for ease of access?
+        case
+        cb
+        WfCutElim.wf_cut_ind
+    Admitted.
+    *)
+
+      (*
+    Lemma add_open_term'_sound (i : V_map _) with_sorts r s c e t
+      : wf_subst l [] s c ->
+        wf_term l c e t ->
+        assign_subst_in_instance s i r ->
+        state_sound_for_model lang_model i
+          (add_open_term' succ sort_of l with_sorts r e)
+          (fun i x => map.get i x = Some (inl e[/s/])).
+    Proof.
+      unfold add_open_term.
+      intros Hsub H.
+      pattern e.
+      pattern t.
+      revert e t H.
+      apply WfCutElim.wf_term_cut_ind; intros.
+      {
+    Admitted.
+       *)
+    
+    Context (l : lang) (Hwf : wf_lang l) (sort_of_fresh : fresh sort_of l).
+    
+    Lemma add_open_sort_sound (i : V_map _) with_sorts r s c t
+      : wf_args l [] s c ->
+        wf_sort l c t ->
+        wf_ctx l c ->
+        map fst c = map fst r ->
+        args_in_instance l s i (map snd r) ->
+        state_sound_for_model (lang_model l) i
+          (add_open_sort succ sort_of l with_sorts r t)
+          (fun i x => option_relation (lang_model l).(domain_eq _)
+                      (map.get i x) (Some (inr t[/with_names_from c s/]))).
+    Proof.
+      unfold add_open_sort.
+      intros; eapply add_open_sort'_sound; try eassumption.
+      all: eauto with utils.
+    Qed.
+    
+    Lemma add_open_term_sound (i : V_map _) with_sorts r s c e t
+      : wf_args l [] s c ->
+        wf_term l c e t ->
+        wf_ctx l c ->
+        map fst c = map fst r ->
+        args_in_instance l s i (map snd r) ->
+        state_sound_for_model (lang_model l) i
+          (add_open_term succ sort_of l with_sorts r e)
+          (fun i x => option_relation (lang_model l).(domain_eq _)
+                      (map.get i x) (Some (inl e[/with_names_from c s/]))).
+    Proof.
+      unfold add_open_term.
+      intros; eapply add_open_sound; try eassumption.
+      2: eauto with utils.
+      intros; apply add_open_sort_sound; eauto.
+      { eapply wf_sort_lang_monotonicity; eauto. }
+      { eapply wf_ctx_lang_monotonicity; eauto. }       
+    Qed.
+    
+  
+  Lemma add_ctx_sound (i : V_map _) with_sorts s c
+    : wf_subst l [] s c ->
+      wf_ctx l c ->
+      state_sound_for_model (lang_model l) i
+        (add_ctx succ sort_of l with_sorts c)
+        (fun i r => map fst r = map fst c
+                    /\ args_in_instance l (map snd s) i (map snd r)).
+  Proof.
+    unfold add_ctx.
+    induction 1;
+      intros;
+      cbn [list_Mfoldr].
+    { apply ret_sound_for_model'; cbn; auto. }
+    {
+      safe_invert H1.
+      ssm_bind.
+      ssm_bind.
+      {
+        eapply add_open_sort_sound; intuition eauto.
+        apply wf_args_from_wf_subst; eauto.
+      }
+      ssm_bind.
+      {
+        eapply alloc_opaque_sound
+          with (time_travel_term:= inl e : (lang_model l).(domain _));
+          eauto.
+        cbn; econstructor.
+        eapply eq_term_refl; eauto.
+      }
+      ssm_bind.
+      {
+        eapply hash_entry_sound; eauto using lang_model_ok.
+        {
+          cbn.
+          cbn in H9.
+          rewrite H9; eauto.
+        }
+        { refine (interprets_to_sort_of _ _ _ _); eauto. }
+      }
+      ssm_bind.
+      {
+        clear IHwf_subst.
+        eapply union_sound; eauto using lang_model_ok.
+        unfold atom_sound_for_model in H11; cbn in H11.
+        unfold  eq_sound_for_model; cbn.
+        apply H10 in H9; cbn in *; rewrite H9 in H11; cbn in*.
+        unfold option_relation in *.
+        case_match; try congruence.
+        apply H8 in case_match_eqn;apply H10 in case_match_eqn; cbn in *; rewrite case_match_eqn; cbn in*.
+        repeat iss_case; cbn.
+        assert (lang_model_interprets_to l sort_of [inl e] (inr t [/s /]))
+          by (econstructor; eauto).
+        pose proof (lang_model_eq_PER _ Hwf) as HPER.
+        etransitivity; try eassumption.
+        etransitivity.
+        2:{ eapply interprets_to_functional with (m:=lang_model l); try apply H12; eauto using lang_model_ok.
+            cbn.
+            intuition subst.
+            econstructor.
+            eapply eq_term_refl; eauto.
+        }
+        econstructor.
+        eapply eq_sort_subst; eauto.
+        { eapply eq_sort_refl; eauto. }
+        {
+          replace  (with_names_from c' (map snd s)) with s.
+          { eapply eq_subst_refl; eauto. }
+          {
+            revert H; clear; induction 1;
+              basic_goal_prep;
+              basic_utils_crush.
+          }
+        }
+      }
+      {
+        apply ret_sound_for_model'; repeat basic_goal_prep; auto.
+        subst; split; [ f_equal; eauto |].
+        apply args_in_instance_cons; eauto.
+        { repeat (eapply args_in_instance_monotone; eauto). }
+        {
+          apply H10 in H9; cbn in *; rewrite H9; cbn.
+            econstructor.
+            eapply eq_term_refl; eauto.
+        }
+      }
+    }
+  Qed.
+          
+
+    Lemma sequent_of_states_sound A B m i1 s1 Post Post2 rn
+      (s2 : A -> state (instance _) B)
+      : state_sound_for_model m i1 s1 Post ->
         (forall a i2, map.extends i2 i1 ->
-                      (Post_i a i2) ->
-                      Post a ->
-                      state_sound_for_model m i2 (s2 a) i3 Post2) ->
-        model_satisfies_rule V V_Eqb V m (sequent_of_states s1 s2).
+                      Post i2 a ->
+                      state_sound_for_model m i2 (s2 a) Post2) ->
+        model_satisfies_rule m (sequent_of_states s1 s2 rn).
     Proof.
       intros.
       unfold sequent_of_states.
       unfold curry.
       cbn [fst curry uncurry snd].
-    Admitted.
-*)
+    Abort.
+
 
     Hint Rewrite combine_nil : utils.
     Hint Rewrite @map.get_empty : utils.
@@ -626,14 +1836,13 @@ Section WithVar.
     (*TODO: generalize, move*)
     Lemma map_extends_empty A (i1 : V_map A) : map.extends i1 map.empty.
     Proof.
-      clear succ.
+      clear succ lt_succ.
       unfold map.extends.
       basic_goal_prep.
       basic_utils_crush.
     Qed.
     Hint Resolve map_extends_empty  : utils.
 
-    Hint Resolve Properties.map.extends_refl : utils.
 
     
     Lemma state_triple_lift_pre_ex S A Y P s (Q : A * S -> Prop)
@@ -898,7 +2107,7 @@ Section WithVar.
 *)
     
     (*TODO: encapsulate trivial analysis*)
-    Theorem lang_model_of
+  (*  Theorem lang_model_of
       : model_of lang_model (map (uncurry (rule_to_log_rule _ _ succ sort_of l
                                              (H:= unit_analysis))) l).
     Proof.
@@ -927,7 +2136,7 @@ Section WithVar.
                 basic_core_crush.
               1:eapply eq_term_wf_r; eauto with lang_core.
               all:admit.
-            }
+            } *)
             (*
             repeat case_match;
               basic_goal_prep;
@@ -999,7 +2208,7 @@ Section WithVar.
       }
     Qed.
 *)
-Abort.
+(*Abort.*)
         
 
     (*
@@ -1195,7 +2404,7 @@ Abort.
     *)
     
     (*TODO: many of these relations can be functions. what's the best way to define them?*)
-    Fixpoint open_term_in_egraph sub e ex :=
+    (*Fixpoint open_term_in_egraph sub e ex :=
       match e with
       | var x => In (x,ex) sub
       | con n s =>
@@ -1214,9 +2423,10 @@ Abort.
 
     Local Notation sort_in_egraph := (open_sort_in_egraph []).
     Local Notation term_in_egraph := (open_term_in_egraph []).
+*)
 
     (* Note: not using a sort_of analog disallows presorts. Is that ever a downside?*)
-    Definition egraph_wf_sort t :=
+    (*Definition egraph_wf_sort t :=
       exists tx, sort_in_egraph t tx.
 
     Definition has_sort_idx ex tx := atom_in_egraph (Build_atom sort_of [ex] tx) i.
@@ -1254,7 +2464,8 @@ Abort.
           has_sort i (combine (map fst c) s) t
           /\ idxs_have_sorts s c
       | _, _ => False
-      end.      
+      end.
+*)
 
     (*
     Definition sort_atom_wf '(Build_atom f s out) (i : V) :=
@@ -1275,7 +2486,7 @@ Abort.
     *)
 
     (*TODO: Should it derivable from atom_eq? Any reason to keep 2nd def?*)
-    Definition atom_wf '(Build_atom f s out) :=
+   (* Definition atom_wf '(Build_atom f s out) :=
       (* TODO: do I need to add any properties for the sort_of atoms?*)
       match named_list_lookup_err l f with
       | Some (sort_rule c args) => idxs_have_sorts s c
@@ -1292,7 +2503,7 @@ Abort.
              end*)
       | _ => False
       end.
-
+*)
     
     (*
     Definition atom_eq '(Build_atom f s out) f' s' :=
@@ -1308,24 +2519,6 @@ Abort.
 
     (*TODO: move to FunctionalDB.v*)
     (* TODO: invariant currently depends on i! Seems undesirable*)
-    Class egraph_ok (invariant : atom -> Prop) : Prop :=
-      {
-        atoms_in_domain
-        : forall a,
-          atom_in_egraph a i ->
-          all (fun x => uf_rel i.(equiv) x x)
-            (a.(atom_ret _ _)::a.(atom_args));
-        (*
-        atoms_satisfy_invariant
-        : forall a b,
-          atom_in_egraph a ->
-          let a' := fst (canonicalize a i) in
-          invariant a' b.(atom_fn) b.(atom_args);
-        equiv_satisfies_invariant
-*)
-      }.
-
-    Context (Hwf : egraph_ok atom_wf).
 
     (*
 
@@ -1368,7 +2561,7 @@ Abort.
      *)
 
     (*equivalent to the longer one below*)
-    Theorem egraph_sound_eq
+    (*Theorem egraph_sound_eq
       : (forall t1 t2, egraph_eq_sort t1 t2 -> eq_sort l [] t1 t2)
         /\ (forall e1 e2 t, egraph_eq e1 e2 t -> eq_term l [] t e1 e2).
     Proof.
@@ -1398,7 +2591,9 @@ Abort.
         TODO: how to prove this?
         *)
     Admitted.
-    
+     *)
+
+    (*
     Lemma egraph_sound_wf_sort t : egraph_wf_sort t -> wf_sort l [] t.
     Proof.
       destruct 1; eapply eq_sort_wf_l; eauto with lang_core.
@@ -1412,6 +2607,6 @@ Abort.
       eapply eq_term_wf_l; eauto with lang_core.
       eapply egraph_sound_eq; repeat econstructor; intuition eauto.
     Qed.
+    *)
 
-  End Properties.
 End WithVar.

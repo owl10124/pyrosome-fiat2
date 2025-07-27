@@ -8,7 +8,7 @@
  *)
 Set Implicit Arguments.
 
-Require Import BinNat Datatypes.String Datatypes.Result Lists.List Sorting.Permutation.
+Require Import Coq.NArith.BinNat Datatypes.String Datatypes.Result Lists.List Sorting.Permutation.
 Import ListNotations.
 Open Scope string.
 Open Scope list.
@@ -163,6 +163,7 @@ Section WithVar.
                   let x <- hash_entry n s' in
                   if with_sorts then
                     let tsub := combine (map fst c) s' in
+                    (*TODO: add context sorts*)
                     let tx <- add_open_sort tsub t in
                     let tx' <- hash_entry sort_of [x] in
                     let _ <- union tx tx' in
@@ -187,12 +188,12 @@ Section WithVar.
       The recursion is bounded by the number of rules since every term in a sort
       must be of a previously defined sort.
      *)
-    Definition add_open_sort := add_open_sort' (length l).
+    Definition add_open_sort := add_open_sort' (S (length l)).
     Definition add_open_term := add_open_term' add_open_sort.
     
 
-  Notation alloc :=
-    (alloc V succ V V_map V_map V_trie _).
+  Notation alloc_opaque :=
+    (alloc_opaque V succ V V_map V_map V_trie _).
 
 
   Definition add_ctx (c : ctx) : state instance _ :=
@@ -202,9 +203,11 @@ Section WithVar.
                     *)
                    @! let t_v <- add_open_sort sub t in
                      (* using the variables from ctx isn't sound,
-                          so we make sure to allocate a fresh one
+                          so we make sure to allocate a fresh one.
+                          We also write a default analysis value
+                          so that things are analyzable and rebuilding doesn't loop
                       *)
-                     let {(state instance)} x' <- alloc in
+                     let {(state instance)} x' <- alloc_opaque in
                      let tx' <- hash_entry sort_of [x'] in
                      let _ <- union t_v tx' in
                      ret (x,x')::sub) c [].
@@ -360,6 +363,8 @@ Section WithVar.
     order vars from greatest to least
       
    *)
+    Context (rf : nat).
+    Notation sequent_of_states a c := (sequent_of_states a c rf).
   (*
     
    TODO: (IMPORTANT) pick a var order. Currently uses an unoptimized order
@@ -409,9 +414,9 @@ Section WithVar.
 
      Assumes incl l l'
    *)
-  Definition rule_set_from_lang (l l': lang) : rule_set :=
-    build_rule_set succ _ (map (uncurry (rule_to_log_rule l'
-                                           (analysis_result:=unit))) l).
+  Definition rule_set_from_lang rf (l l': lang) : rule_set :=
+    build_rule_set succ _ rf (map (uncurry (rule_to_log_rule l'
+                                           (analysis_result:=unit) rf)) l).
 
  
 
@@ -433,203 +438,7 @@ Section WithVar.
             (hash_node succ default n s')
       end.
      *)
-
-    (*TODO: inherited from functionaldb. fill in.*)
-    Context (spaced_list_intersect
-              (*TODO: nary merge?*)
-              : forall {B} `{WithDefault B} (merge : B -> B -> B),
-                ne_list (V_trie B * list bool) ->
-                (* Doesn't return a flag list because we assume it will always be all true*)
-                V_trie B).
-    
-
-    Section __.
-      Context {X : Type}
-        `{analysis V V X}.
-
-      
-    Local Notation hash_entry := (hash_entry (symbol:=V) succ (analysis_result:=X)).
-      
-    Definition egraph_sort_of (x t : V) : state (instance X) bool :=
-      @! let t0 <- hash_entry sort_of [x] in
-        let t1 <- find t in
-        ret eqb t0 t1.
-
-    Definition eq_proven x1 x2 t : state (instance X) bool :=
-      @!let b1 <- egraph_sort_of x1 t in
-        let b2 <- are_unified x1 x2 in
-        ret (andb b1 b2).
-
-    (*TODO: move to Utils *)
-    Instance WithDefault_squared {V} `{WithDefault V}
-      : WithDefault (WithDefault V) := ltac:(assumption).
-
-    (*Note: l has to contain the ctx_to_rules of the context *)
-    Definition egraph_equal l (rws : rule_set) fuel (e1 e2 : Term.term V) (t : Term.sort V) :=
-      let comp : state (instance X) bool :=
-        @!let {(state (instance X))} x1 <- add_open_term l true [] e1 in
-          let {(state (instance X))} x2 <- add_open_term l true [] e2 in
-          let {(state (instance X))} xt <- add_open_sort l true [] t in
-          let {(state (instance X))} _ <- rebuild 1000 (*TODO: magic number *) in
-          (saturate_until succ V_default
-             spaced_list_intersect rws (eq_proven x1 x2 xt) fuel)
-      in (comp (empty_egraph default X)).
-
-    End __.
-
-  (*******************************************)
-  
-  (*Extraction sketches*)
-  (*
-    Extraction is about finding a (least-weight) tree in a graph,
-    starting from a given root.
-    Specifically, a tree such that each leaf is a valid leaf node.
-    (in the egraph case, a 0-argument node, i.e. a node with no out edges)
-
-    restatement: lowest-weight 'full' tree, where a full tree is not a prefix of any other tree.
-    Dyn prog?
-    compute lowest-weight 'full' tree for all nodes.
-    go by node arity?
-    for each node, compute the lwft from its children's lwfts if all exist, save weight.
-    If not all children have lwfts, move to reserve worklist.
-    once worklist is empty, switch to reserve if it is shorter than the starting worklist.
-    Repeat.
-
-    Define weight as the sum of node weights
-
-    Idea:
-    - maintain extraction incrementally w/ egraph
-    - as table in db? (requires finer-grain control over what columns are up to equivalence)
-    - requires proper node indexing (can't forget original node ids)
-
-    Supporting syntactic analyses:
-    for each table/symbol, maintain a legend of which inputs/outputs are semantic,
-    i.e. congruent wrt equivalence
-    Issue: how to merge outputs that are syntacitc?
-    answer: need merge defined; e.g. for extraction, use weight ordering
-    in other words: can weaken requirements to lattice instead of UF (mentioned in egg papers)
-
-    On efficiency: if extraction is "fast enough" post hoc,
-    then it seems wrong to put it in the egraph,
-    since it would slow down the inner loop
-   *)
-  
-    Section EExtract.
-      (*TODO: generalize from nat to any metric (e.g. list nat),
-        or max instead of sum
-      
-      Check list_sum.
-      Check Nat.ltb.
-       *)
-      
-      (* look for node with least weight, interpreting None as oo *)
-      Context (symbol_weight : atom -> option N).
-      
-      (* TODO generalize to be monadic *)
-      Fixpoint minimum' {A} (ltb : A -> A -> bool) (l : list A) (min : A) : A :=
-        match l with
-        | [] => min
-        | x::l =>
-            if ltb x min then minimum' ltb l x else minimum' ltb l min
-        end.
-
-      Definition minimum {A} ltb (l : list A) :=
-        match l with
-        | [] => None
-        | x::l => Some (minimum' ltb l x)
-        end.
-
-      Definition enter {A S} `{Eqb A} x : stateT S (stateT (list A) option) unit :=
-        fun S l => if inb x l then None else Some (tt, S,(x::l)).
-      
-      Definition exit {A S} `{Eqb A} :  stateT S (stateT (list A) option) unit :=
-        fun S l => Some (tt, S, tl l).
-
-      (*TODO: doesn't have to return an option/always returns Some*)
-      Fixpoint Mfiltermap {S A B}
-        (f : A -> stateT S (stateT (list V) option) B) (l : list A)
-        : stateT S (stateT (list V) option) (list B) :=
-        match l with
-        | [] => Mret []
-        | x::l =>
-            fun S s =>
-              match f x S s with
-              | None => Mfiltermap f l S s
-              | Some (x', S', s') =>
-                  @!let {option} (l', S', s') <- Mfiltermap f l S' s' in
-                    ret {option} (x'::l', S', s')
-              end
-        end.
-
-      Definition memoize {A M} `{Monad M} (f : V -> stateT (V_map A) M A) (x:V)
-        : stateT (V_map A) M A :=
-        fun S =>
-          match map.get S x with
-          | Some v => Mret (v,S)
-          | None => f x S
-          end.
-
-      Definition list_sum := fun l : list N => fold_right N.add 0%N l.
-
-      Notation ST := (stateT (V_map (term * N)) (stateT (list V) option)).
-      
-    (* returns the weight of the extracted term.
-       TODO: memoize
-       Maintains a 'visited' stack to avoid cycles
-     *)
-      Fixpoint extract' fuel eclasses (uf : union_find V (V_map V) (V_map _)) (x : V)
-        : stateT (V_map (term * N)) (stateT (list V) option) (term * N) :=
-        match fuel with
-        | 0 => fun _ _ => None
-        | S fuel =>
-            let process (x : V) p
-              : stateT (V_map (term * N)) (stateT (list V) option) (term * N) :=
-              let '(f, args):= p in 
-              @!let {ST} _ <- enter x in
-                let {ST} weight <-
-                      lift (T:= stateT (V_map _))
-                        (lift (symbol_weight (Build_atom (f:V) args x))) in
-                let {ST} args' <- list_Mmap (memoize (extract' fuel eclasses uf)) args in
-                let {ST} _ <- exit in
-                ret {ST} (con f (map fst args'),
-                    (list_sum (weight::(map snd args'))))
-            in
-            (* TODO: is find necessary? might always be a no-op *)
-            @!let (_,x') := UnionFind.find _ _ _ _ uf x in
-              let {ST} cls <- lift (T:= stateT (V_map _))
-                                (lift (T:= stateT (list V))
-                                   (map.get eclasses x)) in
-              let {ST} candidates <- Mfiltermap (process x) cls in
-              (lift (T:= stateT (V_map _))
-                 (lift (T:= stateT (list V))
-                    (minimum (fun x y => N.ltb (snd x) (snd y)) candidates)))
-        end.
-
-      Definition build_eclasses {X} : db_map V V _ _ X -> V_map (list (V * list V)) :=
-        let process_row f acc args row :=
-          let out := row.(entry_value _ _) in
-          match map.get acc out with
-          | Some l => map.put acc out ((f,args)::l)
-          | None => map.put acc out [(f,args)]
-          end
-        in
-        let process_table acc f :=
-          map.fold (process_row f) acc
-        in
-        map.fold process_table map.empty.
-        
-      Definition extract fuel {X} (i : instance X) x :=
-        let cls := (build_eclasses i.(db)) in
-        option_map fst
-          (option_map fst (extract' fuel cls i.(equiv) x map.empty [])).
-      
-    (*TODO: differential extraction;
-    extract 2 terms together with a shared weight metric (distance)
-     *)
-
-    End EExtract.
-
-    Section AnalysisExtract.
+  Section AnalysisExtract.
       (* look for node with least weight, interpreting None as oo.
          Note: positive because termination depends on nonzero weight.N
        *)
@@ -700,7 +509,7 @@ Section WithVar.
         in
         map.fold process_table map.empty.
 
-      Definition node_lt (x_a : option positive) (p : ne_list V * option positive) :=
+      Definition atom_le (x_a : option positive) (p : ne_list V * option positive) :=
         oP_le (snd p) x_a.
 
       Context (i : instance (option positive)).
@@ -727,21 +536,114 @@ Section WithVar.
       Instance result_default {A} : WithDefault (result A) :=
         error:("Default value!").
 
-      Fixpoint extract_weighted fuel x : result term :=
-        @! let x_a <- result_of_option_else
-                        (map.get i.(analyses _ _ _ _ _ _) x)
-                        error:("No analysis for" x)
-          in
-          let x_class <- result_of_option_else
-                            (map.get e_classes x)
-                            error:("No eclass for" x) in
-          let (x_f, x_args, _) <- result_of_option_else
-                                    (List.find (node_lt x_a) x_class)
-                                    error:(x "has no term of size at most" x_a) in
-          let children <- list_Mmap (decr fuel extract_weighted) x_args in
-          ret (con x_f children).
+      (*TODO: move to StateMonad*)
+      Definition stateT_get {S M} `{Monad M} : stateT S M S :=
+        fun s => Mret (s,s).
+      (*returns the put element for convenience*)
+      Definition stateT_put {S M} `{Monad M} x : stateT S M unit :=
+        fun _ => Mret (tt,x).
+
+      
+      Section Memoize.
+        Context {A B} {mp : map.map A B} {M} `{Monad M}
+          (f : forall {MT} `{MonadTrans MT}, (A -> MT M B) -> A -> MT M B).
+        Arguments f [MT]%function_scope {H0} _%function_scope _.
+
+        Definition memoizeF (rec : A -> stateT mp M B) (a: A) : stateT mp M B :=
+          @! let s <- stateT_get in
+            match map.get s a with
+            | Some x => Mret (M:=stateT mp M) x
+            | None => @! let {(stateT mp M)} x <- f rec a in
+                        let _ <- stateT_put (map.put s a x) in
+                        ret {(stateT mp M)} x
+            end.
+      End Memoize.
+      
+      Section __.
+        Context MT `{MonadTrans MT} (rec : V -> MT result term).
+        
+        Definition extract_weightedF x : MT result term :=
+          @! let x_a <- lift (result_of_option_else
+                                (map.get i.(analyses) x)
+                                error:("No analysis for" x))
+            in
+            let x_class <- lift (result_of_option_else
+                                   (map.get e_classes x)
+                                   error:("No eclass for" x)) in
+            let (x_f, x_args, _) <- lift (result_of_option_else
+                                            (List.find (atom_le x_a) x_class)
+                                            error:(x "has no term of size <=" x_a)) in
+            let children <- list_Mmap rec x_args in
+            ret (con x_f children).
+      End __.
+
+      Fixpoint extract_weighted' fuel : V -> stateT (V_map term) result term  :=
+        memoizeF extract_weightedF (decr fuel (extract_weighted')).
+
+      (* Memoized so that the same e_class is never accessed twice.
+         This makes the procedure at worst linear in the size of the egraph.
+       *)
+      Definition extract_weighted fuel x :=
+        @!let x <- extract_weighted' fuel x map.empty in
+          ret fst x.
+      
+    (* Notes on verifying extraction:
+       - cheap option: re-add the term and check id
+       - more intensive: extract to an arbitrary model
+     *)
           
     End AnalysisExtract.
+    
+
+    (*TODO: inherited from functionaldb. fill in.*)
+    Context (spaced_list_intersect
+              (*TODO: nary merge?*)
+              : forall {B} `{WithDefault B} (merge : B -> B -> B),
+                ne_list (V_trie B * list bool) ->
+                (* Doesn't return a flag list because we assume it will always be all true*)
+                V_trie B).
+    
+
+    Section __.
+      (* TODO: generalize later
+      Context {X : Type}
+        `{analysis V V X}.
+       *)
+
+      
+      Local Notation hash_entry := (hash_entry (symbol:=V) succ (analysis_result:=option positive)).
+      Local Notation instance := (instance (option positive)).
+
+      Instance depth : analysis V V (option positive) :=
+        weighted_depth_analysis (fun _ => Some xH).
+      
+    Definition egraph_sort_of (x t : V) : state instance bool :=
+      @! let t0 <- hash_entry sort_of [x] in
+        let t1 <- find t in
+        ret eqb t0 t1.
+
+    Definition eq_proven x1 x2 t : state instance bool :=
+      @!let b1 <- egraph_sort_of x1 t in
+        let b2 <- are_unified x1 x2 in
+        ret (andb b1 b2).
+
+    (*TODO: move to Utils *)
+    Instance WithDefault_squared {V} `{WithDefault V}
+      : WithDefault (WithDefault V) := ltac:(assumption).
+
+    (*Note: l has to contain the ctx_to_rules of the context *)
+    Definition egraph_equal l (rws : rule_set) rfuel fuel (e1 e2 : Term.term V) (t : Term.sort V) :=
+      let comp : state instance (bool * _ * _) :=
+        @!let {(state instance)} x1 <- add_open_term l true [] e1 in
+          let {(state instance)} x2 <- add_open_term l true [] e2 in
+          let {(state instance)} xt <- add_open_sort l true [] t in
+          let {(state instance)} _ <- rebuild rfuel (*TODO: magic number *) in
+          let {state instance}res <- saturate_until succ V_default
+                       spaced_list_intersect rfuel rws (eq_proven x1 x2 xt) fuel in
+          ret (res, x1, x2)
+      in (comp (empty_egraph default _)).
+
+    End __.
     
 (* Egraph-based elaboration:
    Idea: have an add_unelab_term fn that allocates fresh idxs for elab holes,
@@ -770,17 +672,16 @@ Module PositiveInstantiation.
   Export PosListMap.
   
   (*TODO: the default is biting me*)
-  Definition egraph_equal {X} `{analysis _ _ X}
-    : lang positive -> rule_set positive positive trie_map trie_map ->
-      nat -> Term.term positive -> Term.term positive -> Term.sort positive ->
-      _ * instance _ _ _ _ _ X :=
+  Definition egraph_equal
+    : lang positive -> rule_set positive positive trie_map trie_map -> nat ->
+      nat -> Term.term positive -> Term.term positive -> Term.sort positive -> _ :=
     (egraph_equal ptree_map_plus (@pos_trie_map) Pos.succ sort_of (@compat_intersect)).
 
   (*TODO: move somewhere?*)
   Definition filter_eqn_rules {V} : lang V -> lang V :=
     filter (fun '(n,r) => match r with term_rule _ _ _ | sort_rule _ _ => false | _ => true end).
 
-  Definition build_rule_set : lang positive -> lang positive -> rule_set positive positive trie_map trie_map :=
+  Definition build_rule_set : nat -> lang positive -> lang positive -> rule_set positive positive trie_map trie_map :=
     rule_set_from_lang ptree_map_plus _ Pos.succ sort_of (*fold_right Pos.max xH *).
   
   (* all-in-one when it's not worth separating out the rule-building.
@@ -788,16 +689,24 @@ Module PositiveInstantiation.
      
    (*TODO: handle term closing, sort matching*)
    *)
-  Definition egraph_equal' {V} `{Eqb V} {X} `{analysis V V X} (l : lang V) n c (e1 e2 : Term.term V) (t : Term.sort V) : _ :=
+  Definition egraph_equal' {V} `{Eqb V} {X} `{analysis V V X} (l : lang V) rn n c (e1 e2 : Term.term V) (t : Term.sort V) : _ :=
     let rename_and_run : state (renaming V) _ :=
       @! let l' <- rename_lang (ctx_to_rules c ++ l) in
         let e1' <- rename_term (var_to_con e1) in
         let e2' <- rename_term (var_to_con e2) in
         let t' <- rename_sort (sort_var_to_con t) in
-        ret (egraph_equal l' (build_rule_set (filter_eqn_rules l') l') n e1' e2' t')
+        ret (egraph_equal l' (build_rule_set rn (filter_eqn_rules l') l') rn n e1' e2' t')
     in
     (*2 so that sort_of is distict*)
     (rename_and_run ( {| p_to_v := map.empty; v_to_p := {{c }}; next_id := 2 |})).
+  (*
+   (fun g : instance =>
+                  (@!let {result} e1' <- extract_weighted g extract_fuel x1 in
+                     let {result} e2' <- extract_weighted g extract_fuel x2 in
+                     
+                     error:(x1 "not identified with" x2
+                              "Extracted term 1:" e1'
+                              "Extracted term 2:" e2'), g)) *)
   
 End PositiveInstantiation.
 
@@ -805,18 +714,19 @@ Require Ascii.
 Module StringInstantiation.
   Export StringListMap.
 
-  Definition egraph_equal {X} `{analysis _ _ X}
-    : lang string -> rule_set string string string_trie_map string_trie_map ->
-      nat -> _ -> Term.term string -> Term.term string -> Term.sort string ->
-      _ * instance _ _ _ _ _ X :=
-    fun l rw n c e1 e2 t =>
+  Definition egraph_equal
+    : lang string -> rule_set string string string_trie_map string_trie_map -> nat ->
+      nat -> nat -> _ -> Term.term string -> Term.term string -> Term.sort string ->
+      _ * instance _ _ _ _ _ _ :=
+    fun l rw rn n en c e1 e2 t =>
     let l' := ctx_to_rules c ++ l in
     egraph_equal string_ptree_map_plus (@string_list_trie_map)
       string_succ sort_of
-      (@PosListMap.compat_intersect) l' rw n
+      (@PosListMap.compat_intersect) l' rw rn n
       (var_to_con e1) (var_to_con e2) (sort_var_to_con t).
   
-  Definition build_rule_set : lang string ->
+  Definition build_rule_set : nat ->
+                              lang string ->
                             lang string ->
                             rule_set string string string_trie_map string_trie_map :=
     rule_set_from_lang string_ptree_map_plus _ string_succ sort_of

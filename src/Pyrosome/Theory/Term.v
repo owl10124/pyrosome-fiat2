@@ -150,8 +150,6 @@ Arguments term_subst_lookup {_} !s n/.
 Section WithEqb.  
   Context {V_Eqb : Eqb V}
     {V_Eqb_ok : Eqb_ok V_Eqb}.
-
-
   
 #[export] Instance term_eqb : Eqb term :=
   fix term_eqb (e1 e2 : term) :=
@@ -323,16 +321,7 @@ Lemma id_args_cons A n (a :A) c
 Proof.
   reflexivity.
 Qed.
-
   
-  (*TODO: move to Substable.v*)
-  Lemma id_args_nil {A} `{Substable0 A} B'
-    : @id_args V A _ B' [] = [].
-  Proof.
-    reflexivity.
-  Qed.
-  
-#[local] Hint Rewrite id_args_nil : term.  
 #[local] Hint Rewrite id_args_cons : term.
 
 Lemma term_subst_nil e : term_subst [] e = e.
@@ -716,11 +705,6 @@ Module Notations.
     x (in custom arg at level 0, x constr).
   Notation "{ x }" :=
     x (in custom sort at level 0, x constr).
-  (* TODO: issues; fix *)
-  (*
-    Notation "{ x }" :=
-    x (in custom ctx at level 0, x constr).
-  *)
 
   (*TODO: still including string scope here for convenience.
     Is there a way to parameterize that?
@@ -765,11 +749,6 @@ Module Notations.
     (var x%string)
       (in custom arg at level 0, x constr at level 0, format "x").
 
-  
-  (* TODO: allow redundant parens?
-  Notation "( e )" := e (in custom term at level 0, e custom term at level 100).
-  Notation "( e )" := e (in custom sort at level 0, e custom sort at level 100).
-   *)
 
 Goal False.
   pose {{e #"foo" }}.
@@ -782,12 +761,12 @@ Abort.
 
   Notation "'{{c' }}" :=
     nil
-      (at level 0, format "'[' '{{c'  '}}' ']'")
+      (at level 0, format "'[' '{{c'  '}}' ']'", only parsing)
     : ctx_scope.
   Notation "'{{c' bd , .. , bd' '}}'" :=
     (cons bd' .. (cons bd nil)..)
       (at level 0, bd custom ctx_binding at level 100,
-          format "'[' {{c  '[hv' bd ,  '/' .. ,  '/' bd' ']' }} ']'") : ctx_scope.
+          format "'[' {{c  '[hv' bd ,  '/' .. ,  '/' bd' ']' }} ']'", only parsing) : ctx_scope.
 
   Notation "bd , .. , bd'" :=
     (cons bd' .. (cons bd nil)..)
@@ -817,7 +796,7 @@ Abort.
     epose (as_ctx {{c "x" : #"env", "y" : #"ty" "x", "z" : #"ty" "x"}}).
   Abort.
   
-  (* Used to print arguments in the order the appear in a term *)
+  (* Used to print arguments in the order they appear in a term *)
   Definition argument_seq_marker {V} (s : list (term V)) := s.
   
   Notation "al" :=

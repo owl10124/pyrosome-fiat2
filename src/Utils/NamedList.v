@@ -343,6 +343,15 @@ Section __.
     case_match; basic_goal_prep; basic_utils_crush.
   Qed.
 
+  (* Note: does not error out on bad inputs *)
+  Fixpoint select_sublist {A} (s : named_list A) (filter : list S) :=
+    match s, filter with
+    | [], _ | _, [] => []
+    | (n,a)::s', n'::filter' =>
+        if eqb n n' then a::(select_sublist s' filter')
+        else (select_sublist s' filter)
+    end.
+
 End __.
 
 
@@ -399,3 +408,16 @@ Arguments named_list_lookup_none {S}%type_scope {EqbS EqbS_ok} [A]%type_scope l 
 #[export] Hint Rewrite @fresh_app : utils.
 #[export] Hint Resolve all_fresh_insert_rest_is_fresh : utils.
 #[export] Hint Resolve named_list_lookup_err_in : utils.
+
+
+
+Lemma pair_fst_in_exists:
+  forall [S A : Type] (l : named_list S A) (n : S),
+    In n (map fst l) -> exists a, In (n, a) l.
+Proof.
+  induction l;
+    basic_goal_prep;
+    basic_utils_crush.
+  apply IHl in H0; break.
+  exists x; eauto.
+Qed.

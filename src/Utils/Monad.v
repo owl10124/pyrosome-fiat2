@@ -32,7 +32,7 @@ Notation "p <?- e ; b" :=
 (*TODO: this notation prints too readily*)
 Notation "'let' p := e 'in' b" :=
   (let p := e in b)
-    (in custom monadic_do at level 200, left associativity, p pattern at level 0, e constr, b custom monadic_do).
+    (in custom monadic_do at level 200, left associativity, p pattern at level 0, e constr, b custom monadic_do, only parsing).
 
 
 Notation "'let' p <?- e 'in' b" :=
@@ -46,36 +46,37 @@ Notation "'let' ! e 'in' b" :=
 Notation "'if' c 'then' b1 'else' b2" :=
   (if c then b1 else b2)
     (in custom monadic_do at level 200, left associativity,
-        c constr, b1 custom monadic_do, b2 custom monadic_do).
+        c constr, b1 custom monadic_do, b2 custom monadic_do, only parsing).
 
 Notation "e1 ; e2" :=
   (Mseq e1 e2)
-    (in custom monadic_do at level 100, left associativity,
+    (in custom monadic_do at level 100, right associativity,
         e1 custom monadic_do,
         e2 custom monadic_do).
 
 Notation "'ret' e" := (Mret e) (in custom monadic_do at level 90, e constr).
 
-Notation "e" := e (in custom monadic_do at level 90, e constr at level 0).
+Notation "e" := e (in custom monadic_do at level 90, e constr at level 9).
 
 (* For disambiguation (usually debugging) *)
 Notation "'ret' { M } e" :=
   (Mret (M:=M) e)
-    (in custom monadic_do at level 90, e constr, only parsing).
+    (in custom monadic_do at level 90, e constr,
+        M constr at level 200, only parsing).
 
 Notation "'let' { M } p <- e 'in' b" :=
   (Mbind (M:=M) (fun p => b) e)
     (in custom monadic_do at level 200, left associativity,
         p pattern at level 0, e constr, b custom monadic_do,
+        M constr at level 200,
         only parsing).
 
 Notation "'let' { M } p <?- e 'in' b" :=
   (Mbind (M:=M) (fun x => match x with p => b | _ => default end) e)
     (in custom monadic_do at level 200, left associativity,
         p pattern at level 0, e constr, b custom monadic_do,
+        M constr at level 200,
         only parsing).
-
-(*Notation "e" := (e) (in custom monadic_do at level 80, e constr at level 80).*)
 
 (*
 Notation "! e ; b" :=
@@ -128,8 +129,6 @@ Section MonadListOps.
     | a::al' => Mseq (f a) (list_Miter al')
     end.
   End __.
-  
-
   
   Fixpoint list_Miter_idx' (f : nat -> A -> M unit) (l : list A) n : M unit :=
     match l with
@@ -184,6 +183,13 @@ Definition optionT (M : Type -> Type) A := M (option A).
 Definition option_monad : Monad option :=
   Eval cbv in (optionT_trans.(transformer_monad) : Monad (optionT id)).
 #[export] Existing Instance option_monad.
+
+
+Definition pair_Mmap {A A' B B' M} `{Monad M}
+  (f : A -> M A') (g : B -> M B') (p: A * B) : M (A' * B')%type :=
+  @! let x <- f (fst p) in
+    let y <- g (snd p) in
+    ret (x,y).
 
 From coqutil Require Map.Interface.
 
@@ -470,7 +476,7 @@ Module StateMonad.
           m constr, b custom monadic_do).
   
   Notation "'for/fold' kp vp 'from' m [[ acc := a ]] 'in' b" :=
-    (map_Mfold (fun kp vp acc => b) m a)                       
+    (map_Mfold (fun kp vp acc => b) m a)                    
       (in custom monadic_do at level 200, left associativity,
           kp pattern at level 0,
           vp pattern at level 0,
@@ -479,7 +485,9 @@ Module StateMonad.
   
   Arguments stateT S%type_scope M%function_scope A%type_scope : clear implicits.
   Arguments state S%type_scope A%type_scope : clear implicits.
-
+  
+  #[export] Instance default_state S {A} `{WithDefault A} : WithDefault (state S A) :=
+    fun s => (default, s).
   
 End StateMonad.
 
