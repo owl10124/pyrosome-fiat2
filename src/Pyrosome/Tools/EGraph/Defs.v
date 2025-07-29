@@ -59,7 +59,7 @@ Section WithVar.
   Notation subst := (@subst V).
   Notation rule := (@rule V).
   Notation lang := (@lang V).
-  
+
   Notation eq_subst l :=
     (eq_subst (Model:= core_model l)).
   Notation eq_args l :=
@@ -71,7 +71,7 @@ Section WithVar.
   Notation wf_ctx l :=
     (wf_ctx (Model:= core_model l)).
 
-  
+
   (*TODO: a bit of an abuse of the code*)
   Fixpoint var_to_con (t : term) :=
     match t with
@@ -88,8 +88,8 @@ Section WithVar.
    *)
   Definition ctx_to_rules : ctx -> lang :=
     named_map (fun t => term_rule [] [] (sort_var_to_con t)).
-  
-  Context 
+
+  Context
       (V_map : forall A, map.map V A)
       (V_map_plus : ExtraMaps.map_plus V_map)
       (V_map_ok : forall A, map.ok (V_map A))
@@ -100,7 +100,7 @@ Section WithVar.
   Notation atom := (atom V V).
 
   Context (succ : V -> V).
-  
+
   (* Include sort_of as special symbol/fn in db. *)
   Context (sort_of : V).
 
@@ -122,15 +122,15 @@ Section WithVar.
   Definition write {A} a : writer A unit :=
     ([a],tt).
 
-  
+
   Context (supremum : list V -> V).
-  
+
   (* Open terms are for patterns only.
      To run an egraph on terms with variables,
      first map variables to constructors.
    *)
   Section WithLang.
-    
+
     Context (l : lang).
 
     Context (analysis_result : Type)
@@ -156,7 +156,7 @@ Section WithVar.
            by accident.
          *)
         | Term.var x => Mret (named_list_lookup default sub x)
-        | Term.con n s =>          
+        | Term.con n s =>
             match named_list_lookup_err l n with
             | Some (term_rule c args t) =>
                 @! let s' <- list_Mmap (add_open_term' sub) s in
@@ -190,7 +190,7 @@ Section WithVar.
      *)
     Definition add_open_sort := add_open_sort' (S (length l)).
     Definition add_open_term := add_open_term' add_open_sort.
-    
+
 
   Notation alloc_opaque :=
     (alloc_opaque V succ V V_map V_map V_trie _).
@@ -213,7 +213,7 @@ Section WithVar.
                      ret (x,x')::sub) c [].
 
   End SortFlag.
-  
+
     (*TODO: deprecate & use (version of?) instance version below only
       For best results, properly (& generically?) lay out queries as an alternate
       presentation of a DB.
@@ -277,7 +277,7 @@ Section WithVar.
 
 
       Running Q as a query on D produces { s | s in Hom(Q,Qs) for Qs subset D}
-      
+
       Running Q',s additively on D produces D'
       - compute s' as s + id where id fills Q's domain
         + Note: this is a interesting property that definitely has a name, we'll call it P1
@@ -311,7 +311,7 @@ Section WithVar.
 
      next attempt:
 
-     
+
      D' is the union of D and
      { R'_fs | f+s : R -> R'_fs, s in Hom(Q,Qs) for Qs subset D,
                f is bijective, and dom(f) + dom(s) = dom(R)
@@ -320,7 +320,7 @@ Section WithVar.
 
      *)
 
-  
+
   (*
     On variable ordering
 
@@ -351,7 +351,7 @@ Section WithVar.
     - seems better to fully constrain one thing, so that constraining the next
       happens in as few subtries as possible?
     - if truly independent, then intersection skips, so there is no cost.
-    
+
 
     Good match set size heuristics:
     - sorts have smaller match sets
@@ -361,22 +361,22 @@ Section WithVar.
 
     One potential sort order:
     order vars from greatest to least
-      
+
    *)
     Context (rf : nat).
     Notation sequent_of_states a c := (sequent_of_states a c rf).
   (*
-    
+
    TODO: (IMPORTANT) pick a var order. Currently uses an unoptimized order
 
    *)
   Definition rule_to_log_rule n (r : rule) : sequent V V :=
     match r with
-    | sort_rule c args =>        
+    | sort_rule c args =>
         sequent_of_states
           (add_ctx false c)
           (fun sub => add_open_sort true sub (scon n (id_args c)))
-    | term_rule c args t => 
+    | term_rule c args t =>
         sequent_of_states
           (add_ctx false c)
           (* add_open_term sees the language, so it handles t *)
@@ -392,7 +392,7 @@ Section WithVar.
           (fun '(sub,x1) =>
              @! let x2 <- add_open_sort true sub t2 in
                (union x1 x2))
-    | term_eq_rule c e1 e2 t => 
+    | term_eq_rule c e1 e2 t =>
         sequent_of_states
           (@!let sub <- add_ctx false c in
              let x1 <- add_open_term false sub e1 in
@@ -404,11 +404,11 @@ Section WithVar.
     end.
 
   End WithLang.
-  
+
   Notation rule_set := (rule_set V V V_map V_map).
-  
-  
-  
+
+
+
   (* Note: only pass in the subset of the language you want to run.
      Often, that will be exactly the equational rules.
 
@@ -418,7 +418,7 @@ Section WithVar.
     build_rule_set succ _ rf (map (uncurry (rule_to_log_rule l'
                                            (analysis_result:=unit) rf)) l).
 
- 
+
 
     (* TODO: any reason to use the non-open ones? can just use the open one w/ empty sub
     Fixpoint add_term (t : term)
@@ -429,7 +429,7 @@ Section WithVar.
             let sub := combine (map fst c
             (hash_node succ default n s')
       end.
-    
+
     Definition add_sort (t : term)
       : state instance V :=
       match t with
@@ -450,7 +450,7 @@ Section WithVar.
         | _, None => false
         | Some b', Some a' => BinPos.Pos.leb a' b'
         end.
-      
+
       Definition oP_lt (a b : option positive) :=
         match a, b with
         | None, _ => false
@@ -464,7 +464,7 @@ Section WithVar.
         | _, None => a
         | Some a', Some b' => Some (BinPos.Pos.min a' b')
         end.
-      
+
       Definition oP_maximum (a b : option positive) :=
         match a, b with
         | None, _
@@ -513,7 +513,7 @@ Section WithVar.
         oP_le (snd p) x_a.
 
       Context (i : instance (option positive)).
-      
+
       Let e_classes := build_eclasses' i.(db).
 
       Definition decr fuel {A} `{WithDefault A} (f : _ -> A) :=
@@ -543,7 +543,7 @@ Section WithVar.
       Definition stateT_put {S M} `{Monad M} x : stateT S M unit :=
         fun _ => Mret (tt,x).
 
-      
+
       Section Memoize.
         Context {A B} {mp : map.map A B} {M} `{Monad M}
           (f : forall {MT} `{MonadTrans MT}, (A -> MT M B) -> A -> MT M B).
@@ -558,10 +558,10 @@ Section WithVar.
                         ret {(stateT mp M)} x
             end.
       End Memoize.
-      
+
       Section __.
         Context MT `{MonadTrans MT} (rec : V -> MT result term).
-        
+
         Definition extract_weightedF x : MT result term :=
           @! let x_a <- lift (result_of_option_else
                                 (map.get i.(analyses) x)
@@ -586,14 +586,14 @@ Section WithVar.
       Definition extract_weighted fuel x :=
         @!let x <- extract_weighted' fuel x map.empty in
           ret fst x.
-      
+
     (* Notes on verifying extraction:
        - cheap option: re-add the term and check id
        - more intensive: extract to an arbitrary model
      *)
-          
+
     End AnalysisExtract.
-    
+
 
     (*TODO: inherited from functionaldb. fill in.*)
     Context (spaced_list_intersect
@@ -602,7 +602,7 @@ Section WithVar.
                 ne_list (V_trie B * list bool) ->
                 (* Doesn't return a flag list because we assume it will always be all true*)
                 V_trie B).
-    
+
 
     Section __.
       (* TODO: generalize later
@@ -610,13 +610,13 @@ Section WithVar.
         `{analysis V V X}.
        *)
 
-      
+
       Local Notation hash_entry := (hash_entry (symbol:=V) succ (analysis_result:=option positive)).
       Local Notation instance := (instance (option positive)).
 
       Instance depth : analysis V V (option positive) :=
         weighted_depth_analysis (fun _ => Some xH).
-      
+
     Definition egraph_sort_of (x t : V) : state instance bool :=
       @! let t0 <- hash_entry sort_of [x] in
         let t1 <- find t in
@@ -644,7 +644,7 @@ Section WithVar.
       in (comp (empty_egraph default _)).
 
     End __.
-    
+
 (* Egraph-based elaboration:
    Idea: have an add_unelab_term fn that allocates fresh idxs for elab holes,
    without terms that point to them.
@@ -658,7 +658,7 @@ Section WithVar.
 
    Then saturate, then extract
  *)
-      
+
 
 
 End WithVar.
@@ -670,7 +670,7 @@ From Pyrosome.Tools Require Import PosRenaming.
 From Utils Require PosListMap StringListMap.
 Module PositiveInstantiation.
   Export PosListMap.
-  
+
   (*TODO: the default is biting me*)
   Definition egraph_equal
     : lang positive -> rule_set positive positive trie_map trie_map -> nat ->
@@ -683,10 +683,10 @@ Module PositiveInstantiation.
 
   Definition build_rule_set : nat -> lang positive -> lang positive -> rule_set positive positive trie_map trie_map :=
     rule_set_from_lang ptree_map_plus _ Pos.succ sort_of (*fold_right Pos.max xH *).
-  
+
   (* all-in-one when it's not worth separating out the rule-building.
      Handles renaming.
-     
+
    (*TODO: handle term closing, sort matching*)
    *)
   Definition egraph_equal' {V} `{Eqb V} {X} `{analysis V V X} (l : lang V) rn n c (e1 e2 : Term.term V) (t : Term.sort V) : _ :=
@@ -703,11 +703,11 @@ Module PositiveInstantiation.
    (fun g : instance =>
                   (@!let {result} e1' <- extract_weighted g extract_fuel x1 in
                      let {result} e2' <- extract_weighted g extract_fuel x2 in
-                     
+
                      error:(x1 "not identified with" x2
                               "Extracted term 1:" e1'
                               "Extracted term 2:" e2'), g)) *)
-  
+
 End PositiveInstantiation.
 
 Require Ascii.
@@ -724,7 +724,7 @@ Module StringInstantiation.
       string_succ sort_of
       (@PosListMap.compat_intersect) l' rw rn n
       (var_to_con e1) (var_to_con e2) (sort_var_to_con t).
-  
+
   Definition build_rule_set : nat ->
                               lang string ->
                             lang string ->

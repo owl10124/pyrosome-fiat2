@@ -7,6 +7,7 @@ Open Scope list.
 From Utils Require Import Utils EGraph.Defs Monad.
 From Pyrosome Require Import Theory.Core Elab.Elab Tools.Matches Lang.SimpleVSubst Lang.SimpleVSTLC Tools.EGraph.Defs
   Tools.EGraph.Automation Tools.EGraph.Test.
+Require Import Utils.EGraph.Semantics.
 Import PArith.
 Import Ascii.AsciiSyntax.
 Import StringInstantiation.
@@ -131,38 +132,61 @@ Definition result_to_term (result: Result.result term) : term :=
   | _ => default
   end.
 Set Printing Implicit.
-About default.
+
+Definition inject_for_expressions : list (sequent _ _) :=
+  [!! "G" = "G1", "A" = "A1" :- "exp" "G" "A" -> "x", "exp" "G1" "A1" -> "x"
+  ;
+  !! "G" = "G1", "A" = "A1" :- "val" "G" "A" -> "x", "val" "G1" "A1" -> "x"
+  ;
+  !! "A" = "A1", "B" = "B1" :- "->" "A" "B" -> "x", "->" "A1" "B1" -> "x"
+  ]%log.
 
 Definition state_operation :=
   @saturate_until string String.eqb string_succ
-(default (A:= string))
-string
-String.eqb string_trie_map
-string_ptree_map_plus string_trie_map string_ptree_map_plus
-string_list_trie_map _ (weighted_depth_analysis weight) (@PosListMap.compat_intersect)
-   (
+    (default (A:= string))
+    string
+    string_trie_map
+    string_ptree_map_plus string_trie_map string_ptree_map_plus
+    string_list_trie_map (option positive) (weighted_depth_analysis weight) (@PosListMap.compat_intersect)
+    100
+    (
     @QueryOpt.build_rule_set string String.eqb string_succ (default (A:= string))
-      string String.eqb string_trie_map string_ptree_map_plus string_trie_map
-      string_ptree_map_plus string_list_trie_map inject
-  )
-    (Mret false) 0
+      string  string_trie_map string_ptree_map_plus string_trie_map
+      string_list_trie_map 100  inject_for_expressions
+    )
+    (Mret false) 100
     .
+Check print_egraph.
 
-Definition infer (L: lang) (context: ctx) (t: term) (s: sort): term :=
+Check sort_var_to_con.
+Definition infer (L: lang) (context: ctx) (t: term) (s: sort) :=
   let Language_plus_rules := L ++ (ctx_to_rules context) in
   let Term_with_no_variables := (var_to_con t) in
   let term_with_holes := build_term_with_holes Language_plus_rules Term_with_no_variables in
   let new_context := context ++ get_dummy_context (get_dummy_names (term_with_holes)) in
   let dummy_rules := get_dummy_rules (get_dummy_names (term_with_holes)) in
   let '(str, inst2) := add_open_term weight (Language_plus_rules ++ dummy_rules) [] term_with_holes empty_egraph in
-  let '(id_sort, inst3) := add_open_sort weight (Language_plus_rules ++ dummy_rules) [] s inst2 in
+  let '(id_sort, inst3) := add_open_sort weight (Language_plus_rules ++ dummy_rules) [] (sort_var_to_con s) inst2 in
   let '(id_original_sort, inst4) := @hash_entry string String.eqb string_succ string string_trie_map string_trie_map string_list_trie_map
                                  _ (weighted_depth_analysis weight) sort_of [str] inst3 in
   let '(_, inst5) := @union string String.eqb (default (A:= string)) string string_trie_map string_trie_map string_list_trie_map
                      _ (weighted_depth_analysis weight) id_sort id_original_sort inst4 in
   let '(_, inst6) := state_operation inst5 in
-  con_to_var new_context (result_to_term (extract_weighted inst3 100 str))
-  .
+  (* print_egraph inst6. *)
+  con_to_var new_context (result_to_term (extract_weighted inst6 1000 str)).
+
+Import Core.Notations.
+Compute infer (stlc ++ exp_subst ++ value_subst)
+            [
+              ("e", scon "exp" [var "A"; {{e #"ext" "G" "A"}}]);
+              ("f", {{s #"exp" (#"ext" "G" "A") (#"->" "A" (#"->" "B" "C"))}});
+              ("A", scon "ty" []);
+              ("B", scon "ty" []);
+              ("C", scon "ty" []);
+              ("G", scon "env" [])
+            ]
+
+{{e #"lambda" "A" (#"app" "f" "e")}} {{s #"val" "G" (#"->" "A" (#"->" "B" "C"))}}.
 
 Compute infer (stlc ++ exp_subst ++ value_subst)
             [
@@ -171,8 +195,9 @@ Compute infer (stlc ++ exp_subst ++ value_subst)
             ("A", scon "ty" []);
             ("G", scon "env" [])
             ]
+(* (con "->" [var "B"; var "A"]) (scon "ty" []). *)
 
-(con "lambda" [var "e"; var "A"]).
+(con "lambda" [var "e"; var "A"]) (scon "val" [con "->" [var "B"; var "A"]; var "G"]).
 
 (* Eval unfold Monad.StateMonad.state in *)
 (*  I don't remember what this was for? *)

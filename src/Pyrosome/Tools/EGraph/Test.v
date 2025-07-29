@@ -482,17 +482,10 @@ Instance my_analysis {V} : analysis V V _ := weighted_depth_analysis (fun _ => S
 Require Tools.UnElab.
 
 
-<<<<<<< HEAD
   Arguments Defs.run1iter {idx}%type_scope {Eqb_idx} idx_succ%function_scope
-  idx_zero {symbol}%type_scope {Eqb_symbol} {symbol_map}%function_scope symbol_map_plus
-  {idx_map}%function_scope idx_map_plus {idx_trie}%function_scope {analysis_result}%type_scope
-  {H} spaced_list_intersect%function_scope rs rebuild_fuel%nat_scope _.
-=======
-  Arguments Defs.run1iter {idx}%type_scope {Eqb_idx} idx_succ%function_scope 
   idx_zero {symbol}%type_scope {symbol_map}%function_scope symbol_map_plus
-  {idx_map}%function_scope idx_map_plus {idx_trie}%function_scope {analysis_result}%type_scope 
+  {idx_map}%function_scope idx_map_plus {idx_trie}%function_scope {analysis_result}%type_scope
   {H} spaced_list_intersect%function_scope rebuild_fuel%nat_scope rs _.
->>>>>>> upstream/master
 
 Ltac egraph rn n en :=
       lazymatch goal with
@@ -651,16 +644,13 @@ print_rules.
   Compute (QueryOpt.opt_verbose string string_Eqb
       StringListMap.string_succ string_default string
       StringListMap.string_trie_map StringListMap.string_trie_map
-<<<<<<< HEAD
-      string_ptree_map_plus
-      StringListMap.string_list_trie_map seq).
+      (* string_ptree_map_plus *)
+      (* StringListMap.string_list_trie_map seq). *)
 
 
-=======
       StringListMap.string_list_trie_map seq 1000).
-  
-  
->>>>>>> upstream/master
+
+
   Compute (QueryOpt.opt_live_eqn string string_Eqb
       StringListMap.string_succ string_default string
       StringListMap.string_trie_map StringListMap.string_trie_map
