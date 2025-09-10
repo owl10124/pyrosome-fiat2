@@ -731,7 +731,8 @@ Module PositiveInstantiation.
         let e1' <- rename_term (var_to_con e1) in
         let e2' <- rename_term (var_to_con e2) in
         let t' <- rename_sort (sort_var_to_con t) in
-        let rules <- rename_lang (lang_filter l) in
+        (* Never filter context rules since they are always constant rules. *)
+        let rules <- rename_lang (ctx_to_rules c ++ lang_filter l) in
         ret (egraph_equal l' (build_rule_set rn rules l') rn n e1' e2' t')
     in
     (*2 so that sort_of is distict*)

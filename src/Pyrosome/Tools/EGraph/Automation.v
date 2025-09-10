@@ -87,7 +87,7 @@ Ltac egraph rule_transform n :=
         |- eq_term ?l ?c ?t ?e1 ?e2 =>
           let l' := constr:(ctx_to_rules c ++ l) in
           let rs := constr:(StringInstantiation.build_rule_set
-                              (rule_transform l') l') in
+                              1000 (rule_transform l') l') in
         let result := (eval vm_compute in
                         (StringInstantiation.egraph_equal (*V:=string*) l' rs n c e1 e2 t)) in
         lazymatch result with
