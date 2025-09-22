@@ -12,6 +12,46 @@ Require Coq.derive.Derive.
 
 Compute value_subst_def.
 
+Definition nat_lang_def : lang :=
+  {[l
+  [s|
+      -----------------------------------------------
+      #"natural" srt
+  ];
+  [:|  
+       -----------------------------------------------
+       #"0" : #"natural"
+  ];
+  [:|  "n": #"natural"
+       -----------------------------------------------
+       #"1+" "n" : #"natural"
+  ];
+  [s|  "n": #"natural", "m": #"natural"
+       -----------------------------------------------
+       #"neq" "n" "m" srt
+  ];
+  [:|  "n": #"natural"
+       -----------------------------------------------
+       #"neq_0_l" : #"neq" #"0" (#"1+" "n")
+  ];
+  [:|  "n": #"natural"
+       -----------------------------------------------
+       #"neq_0_r" : #"neq" (#"1+" "n") #"0"
+  ];
+  [:|  "n": #"natural", "m": #"natural",
+       "p" : #"neq" "n" "m"
+       -----------------------------------------------
+       #"neq_1+" "p" : #"neq" (#"1+" "n") (#"1+" "m")
+  ]
+  ]}.
+
+
+Derive nat_lang
+       SuchThat (elab_lang_ext [] nat_lang_def nat_lang)
+       As nat_lang_wf.
+Proof. auto_elab. Qed.
+#[export] Hint Resolve nat_lang_wf : elab_pfs.
+
 Definition stlc_def : lang :=
   {[l/subst [exp_subst++value_subst]
   (* types *)
@@ -42,6 +82,13 @@ Definition stlc_def : lang :=
       #"list" "A": #"ty"
   ];
 
+  [:|
+      "G": #"env",
+      "A": #"ty" 
+      -----------------------------------------------
+      #"lempty": #"val" "G" (#"list" "A")
+  ];
+
   
   (* unops *)
   [:|
@@ -64,7 +111,7 @@ Definition stlc_def : lang :=
       #"notb" #"true" = #"false": #"bool"
   ];
   [:=
-      ----------------------------------------------- ("not_falsej")
+      ----------------------------------------------- ("not_false")
       #"notb" #"false" = #"true": #"bool"
   ];
   (* todo *)
@@ -87,6 +134,23 @@ Definition stlc_def : lang :=
       -----------------------------------------------
       #"andb" "a" "b": #"bool"
   ];
+  [:|
+      "G": #"env",
+      "A": #"ty",
+      "x": #"val" "G" "A",
+      "l": #"val" "G" (#"list" "A")
+      -----------------------------------------------
+      #"cons" "x" "l": #"val" "G" (#"list" "A")
+  ];
+  [:| 
+      "G": #"env",
+      "A": #"ty",
+      "l": #"val" "G" (#"list" "A"),
+      "n": #"int"
+      -----------------------------------------------
+      #"repeat" "l" "n": #"val" "G" (#"list" "A")
+  ];
+  (* expr *)
   [:=
       ----------------------------------------------- ("and_true")
       #"andb" #"true" #"true" = #"true": #"bool"
@@ -101,15 +165,6 @@ Definition stlc_def : lang :=
       ----------------------------------------------- ("and_false_r")
       #"andb" "b" #"false" = #"false": #"bool"
   ];
-  [:| 
-      "G": #"env",
-      "A": #"ty",
-      "l": #"val" "G" (#"list" "A"),
-      "n": #"int"
-      -----------------------------------------------
-      #"repeat" "l" "n": #"val" "G" (#"list" "A")
-  ];
-  (* expr *)
   [:| 
       "G": #"env",
       "cond": #"bool",
@@ -138,11 +193,34 @@ Definition stlc_def : lang :=
       #"if" #"false" "true_expr" "false_expr"
       = "false_expr"
       : #"exp" "G" "A"
+  ];
+  [:|
+      "G": #"env",
+      "A": #"ty",
+      "l": #"val" "G" (#"list" "A")
+      ----------------------------------------------- 
+      #"length" "l": #"natural"
   ]
+  (*
+  [:=
+      "G": #"env"
+      -----------------------------------------------  ("length_nil")
+      #"length" #"lempty" = #"0" : #"natural"
+  ]
+  [:=
+      "G": #"env",
+      "A": #"ty",
+      "l": #"exp" "G" (#"list" "A"),
+      "x": #"exp" "G" "A"
+      -----------------------------------------------  ("length_induct")
+       #"length" (#"cons" "x" "l") = #"1+" (#"length" "l") : #"natural"
+  ]
+   *)
+  
   ]}.
 
 Derive stlc
-       SuchThat (elab_lang_ext (exp_subst++value_subst) stlc_def stlc)
+  SuchThat (elab_lang_ext (exp_subst++value_subst++nat_lang) stlc_def stlc)
        As stlc_wf.
 Proof. auto_elab. Qed.
 #[export] Hint Resolve stlc_wf : elab_pfs.
