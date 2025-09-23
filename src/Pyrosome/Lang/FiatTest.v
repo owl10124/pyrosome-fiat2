@@ -12,68 +12,61 @@ Require Coq.derive.Derive.
 
 Compute value_subst_def.
 
-Definition nat_lang_def : lang :=
-  {[l
-  [s|
+Definition fiat_def : lang :=
+  {[l/subst [exp_subst++value_subst]
+  [:|
       -----------------------------------------------
-      #"natural" srt
+      #"nat": #"ty"
   ];
   [:|  
+      "G": #"env"
        -----------------------------------------------
-       #"0" : #"natural"
+       #"0" : #"exp" "G" #"nat"
   ];
-  [:|  "n": #"natural"
+  [:|  
+       "G": #"env",
+       "n": #"exp" "G" #"nat"
        -----------------------------------------------
-       #"1+" "n" : #"natural"
+       #"1+" "n" : #"exp" "G" #"nat"
   ];
-  [s|  "n": #"natural", "m": #"natural"
+  [s|  "G": #"env",
+       "n": #"exp" "G" #"nat", "m": #"exp" "G" #"nat"
        -----------------------------------------------
        #"neq" "n" "m" srt
   ];
-  [:|  "n": #"natural"
+  [:|  "G": #"env",
+       "n": #"exp" "G" #"nat"
        -----------------------------------------------
        #"neq_0_l" : #"neq" #"0" (#"1+" "n")
   ];
-  [:|  "n": #"natural"
+  [:|  "G": #"env", "n": #"exp" "G" #"nat"
        -----------------------------------------------
        #"neq_0_r" : #"neq" (#"1+" "n") #"0"
   ];
-  [:|  "n": #"natural", "m": #"natural",
+  [:|  "G": #"env", "n": #"exp" "G" #"nat", "m": #"exp" "G" #"nat",
        "p" : #"neq" "n" "m"
        -----------------------------------------------
        #"neq_1+" "p" : #"neq" (#"1+" "n") (#"1+" "m")
-  ]
-  ]}.
+  ];
 
-
-Derive nat_lang
-       SuchThat (elab_lang_ext [] nat_lang_def nat_lang)
-       As nat_lang_wf.
-Proof. auto_elab. Qed.
-#[export] Hint Resolve nat_lang_wf : elab_pfs.
-
-Definition stlc_def : lang :=
-  {[l/subst [exp_subst++value_subst]
   (* types *)
-  [s| 
+  [:| 
       -----------------------------------------------
-      #"word" srt
+      #"int": #"ty"
   ];
-  [s| 
+  [:| 
       -----------------------------------------------
-      #"int" srt
-  ];
-  [s| 
-      -----------------------------------------------
-      #"bool" srt
+      #"bool": #"ty"
   ];
   [:|
+      "G": #"env"
       -----------------------------------------------
-      #"true": #"bool"
+      #"true": #"exp" "G" #"bool"
   ];
   [:|
+      "G": #"env"
       -----------------------------------------------
-      #"false": #"bool"
+      #"false": #"exp" "G" #"bool"
   ];
 
   [:|
@@ -86,88 +79,82 @@ Definition stlc_def : lang :=
       "G": #"env",
       "A": #"ty" 
       -----------------------------------------------
-      #"lempty": #"val" "G" (#"list" "A")
+      #"lempty": #"exp" "G" (#"list" "A")
   ];
 
   
   (* unops *)
-  [:|
-      "x": #"word"
-      -----------------------------------------------
-      #"w-" "x": #"word"
-  ];
   [:| 
-      "x": #"int"
+      "G": #"env",
+      "x": #"exp" "G" #"int"
       -----------------------------------------------
-      #"-" "x": #"int"
+      #"-" "x": #"exp" "G" #"int"
   ];
   [:|
-      "x": #"bool"
+      "G": #"env",
+      "x": #"exp" "G" #"bool"
       -----------------------------------------------
-      #"notb" "x": #"bool"
+      #"notb" "x": #"exp" "G" #"bool"
   ];
   [:=
+      "G": #"env"
       ----------------------------------------------- ("not_true")
-      #"notb" #"true" = #"false": #"bool"
+      #"notb" #"true" = #"false": #"exp" "G" #"bool"
   ];
   [:=
+      "G": #"env"
       ----------------------------------------------- ("not_false")
-      #"notb" #"false" = #"true": #"bool"
+      #"notb" #"false" = #"true": #"exp" "G" #"bool"
   ];
   (* todo *)
   (* binops *)
-  [:| 
-      "a": #"word",
-      "b": #"word"
+  [:|
+      "G": #"env",
+      "a": #"exp" "G" #"int", "b": #"exp" "G" #"int"
       -----------------------------------------------
-      #"w+" "a" "b": #"word"
+      #"+" "a" "b": #"exp" "G" #"int"
   ];
   [:|
-      "a": #"int",
-      "b": #"int"
+      "G": #"env",
+      "a": #"exp" "G" #"bool", "b": #"exp" "G" #"bool"
       -----------------------------------------------
-      #"+" "a" "b": #"int"
-  ];
-  [:|
-      "a": #"bool",
-      "b": #"bool"
-      -----------------------------------------------
-      #"andb" "a" "b": #"bool"
+      #"andb" "a" "b": #"exp" "G" #"bool"
   ];
   [:|
       "G": #"env",
       "A": #"ty",
-      "x": #"val" "G" "A",
-      "l": #"val" "G" (#"list" "A")
+      "x": #"exp" "G" "A",
+      "l": #"exp" "G" (#"list" "A")
       -----------------------------------------------
-      #"cons" "x" "l": #"val" "G" (#"list" "A")
+      #"cons" "x" "l": #"exp" "G" (#"list" "A")
   ];
   [:| 
       "G": #"env",
       "A": #"ty",
-      "l": #"val" "G" (#"list" "A"),
-      "n": #"int"
+      "l": #"exp" "G" (#"list" "A"),
+      "n": #"exp" "G" #"int"
       -----------------------------------------------
-      #"repeat" "l" "n": #"val" "G" (#"list" "A")
+      #"repeat" "l" "n": #"exp" "G" (#"list" "A")
   ];
   (* expr *)
   [:=
+      "G": #"env"
       ----------------------------------------------- ("and_true")
-      #"andb" #"true" #"true" = #"true": #"bool"
+      #"andb" #"true" #"true" = #"true": #"exp" "G" #"bool"
   ];
   [:=
-      "b": #"bool"
+      "G": #"env", "b": #"exp" "G" #"bool"
       ----------------------------------------------- ("and_false_l")
-      #"andb" #"false" "b" = #"false": #"bool"
+      #"andb" #"false" "b" = #"false": #"exp" "G" #"bool"
   ];
   [:=
-      "b": #"bool"
+      "G": #"env", "b": #"exp" "G" #"bool"
       ----------------------------------------------- ("and_false_r")
-      #"andb" "b" #"false" = #"false": #"bool"
+      #"andb" "b" #"false" = #"false": #"exp" "G" #"bool"
   ];
   [:| 
       "G": #"env",
-      "cond": #"bool",
+      "cond": #"exp" "G" #"bool",
       "A": #"ty",
       "true_expr": #"exp" "G" "A",
       "false_expr": #"exp" "G" "A"
@@ -183,7 +170,7 @@ Definition stlc_def : lang :=
       #"if" #"true" "true_expr" "false_expr"
       = "true_expr"
       : #"exp" "G" "A"
-  ];
+      ];
   [:=
       "G": #"env",
       "A": #"ty",
@@ -197,32 +184,29 @@ Definition stlc_def : lang :=
   [:|
       "G": #"env",
       "A": #"ty",
-      "l": #"val" "G" (#"list" "A")
+      "l": #"exp" "G" (#"list" "A")
       ----------------------------------------------- 
-      #"length" "l": #"natural"
-  ]
-  (*
+      #"length" "l": #"exp" "G" #"nat"
+      (*
+  ];
   [:=
       "G": #"env"
       -----------------------------------------------  ("length_nil")
-      #"length" #"lempty" = #"0" : #"natural"
-  ]
+      #"length" #"lempty" = #"0" : #"exp" "G" #"nat"
+  ];
   [:=
       "G": #"env",
       "A": #"ty",
       "l": #"exp" "G" (#"list" "A"),
       "x": #"exp" "G" "A"
       -----------------------------------------------  ("length_induct")
-       #"length" (#"cons" "x" "l") = #"1+" (#"length" "l") : #"natural"
-  ]
-   *)
-  
+       #"length" (#"cons" "x" "l") = #"1+" (#"length" "l") : #"exp" "G" #"nat"
+       *)
+      ]
   ]}.
 
-Derive stlc
-  SuchThat (elab_lang_ext (exp_subst++value_subst++nat_lang) stlc_def stlc)
-       As stlc_wf.
+Derive fiat
+  SuchThat (elab_lang_ext (exp_subst++value_subst) fiat_def fiat)
+       As fiat_wf.
 Proof. auto_elab. Qed.
-#[export] Hint Resolve stlc_wf : elab_pfs.
-
-
+#[export] Hint Resolve fiat_wf : elab_pfs.
