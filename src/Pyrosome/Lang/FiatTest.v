@@ -79,7 +79,7 @@ Definition fiat_def : lang :=
       "G": #"env",
       "A": #"ty" 
       -----------------------------------------------
-      #"lempty": #"exp" "G" (#"list" "A")
+      #"lempty" "A": #"exp" "G" (#"list" "A")
   ];
 
   
@@ -187,12 +187,12 @@ Definition fiat_def : lang :=
       "l": #"exp" "G" (#"list" "A")
       ----------------------------------------------- 
       #"length" "l": #"exp" "G" #"nat"
-      (*
   ];
   [:=
-      "G": #"env"
-      -----------------------------------------------  ("length_nil")
-      #"length" #"lempty" = #"0" : #"exp" "G" #"nat"
+      "G": #"env",
+      "A": #"ty"
+      ----------------------------------------------- ("length_empty")
+      #"length" (#"lempty" "A") = #"0": #"exp" "G" #"nat"
   ];
   [:=
       "G": #"env",
@@ -201,7 +201,6 @@ Definition fiat_def : lang :=
       "x": #"exp" "G" "A"
       -----------------------------------------------  ("length_induct")
        #"length" (#"cons" "x" "l") = #"1+" (#"length" "l") : #"exp" "G" #"nat"
-       *)
       ]
   ]}.
 
