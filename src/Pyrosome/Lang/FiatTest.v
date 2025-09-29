@@ -280,22 +280,182 @@ Definition fiat_def : lang :=
   (* we probably want to stick to values here, though...? *)
   [:| 
       -----------------------------------------------
-      #"cmpr": #"ty"
+      #"comparison": #"ty" (* analog: rocq corelib comparison *)
+  ]; 
+  (*
+  [:| 
+      "A": #"ty"
+      -----------------------------------------------
+      #"comparator" "A": #"ty" (* analog: A -> A -> comparison *)
+  ]; 
+  [:|
+      "G": #"env",
+      "A": #"ty",
+      "cmp": #"comparator" "A",
+      "x1": #"exp" "G" "A",
+      "x2": #"exp" "G" "A"
+      -----------------------------------------------
+      "cmp" "x1" "x2" : #"exp" "G" #"comparison"
+  ];
+     attempt higher-order functions, for record and dict comparison
+   *) 
+  [:|
+      "G": #"env"
+      -----------------------------------------------
+      #"Gt": #"exp" "G" #"comparison"
   ];
   [:|
       "G": #"env"
       -----------------------------------------------
-      #"Gt": #"exp" "G" #"cmpr"
+      #"Lt": #"exp" "G" #"comparison"
   ];
   [:|
       "G": #"env"
       -----------------------------------------------
-      #"Lt": #"exp" "G" #"cmpr"
+      #"Eq": #"exp" "G" #"comparison"
   ];
   [:|
-      "G": #"env"
+      "G": #"env",
+      "A": #"ty",
+      "x1": #"exp" "G" "A",
+      "x2": #"exp" "G" "A"
       -----------------------------------------------
-      #"Eq": #"exp" "G" #"cmpr"
+      #"compare" "x1" "x2" : #"exp" "G" #"comparison"
+  ];
+  (* should this be an axiom?
+  [:|
+      "G": #"env",
+      "A": #"ty",
+      "x": #"exp" "G" "A",
+      -----------------------------------------------
+      #"compare" "x" "x" : #"exp" "G" #"comparison"
+  ];
+   *)
+  (* comparison: bool *)
+  [:=
+      "G": #"env",
+      "x1": #"exp" "G" #"bool"
+      ----------------------------------------------- ("bool_eq")
+      #"compare" "x1" "x1" = #"Eq": #"exp" "G" #"comparison"
+  ];
+
+  [:=
+      "G": #"env"
+      ----------------------------------------------- ("bool_lt")
+      #"compare" #"false" #"true" = #"Lt": #"exp" "G" #"comparison"
+  ];
+
+  [:=
+      "G": #"env"
+      ----------------------------------------------- ("bool_gt")
+      #"compare" #"true" #"false" = #"Gt": #"exp" "G" #"comparison"
+  ];
+
+  (* comparison: nat *)
+  [:=
+      "G": #"env",
+      "x": #"exp" "G" #"nat"
+      ----------------------------------------------- ("nat_eq")
+      #"compare" "x" "x" = #"Eq": #"exp" "G" #"comparison"
+  ];
+
+  [:=
+      "G": #"env",
+      "x": #"exp" "G" #"nat"
+      ----------------------------------------------- ("nat_lt")
+      #"compare" #"0" (#"1+" "x") = #"Lt": #"exp" "G" #"comparison"
+  ];
+
+  [:=
+      "G": #"env",
+      "x": #"exp" "G" #"nat"
+      ----------------------------------------------- ("nat_gt")
+      #"compare" (#"1+" "x") #"0" = #"Gt": #"exp" "G" #"comparison"
+  ];
+
+  [:=
+      "G": #"env",
+      "x1": #"exp" "G" #"nat",
+      "x2": #"exp" "G" #"nat"
+      ----------------------------------------------- ("nat_induct")
+      #"compare" (#"1+" "x1") (#"1+" "x2") = #"compare" "x1" "x2" : #"exp" "G" #"comparison"
+  ];
+
+  (* comparison: list (TODO) *)
+  [:|
+      "G": #"env",
+      "A": #"ty",
+      "l1": #"exp" "G" (#"list" "A"),
+      "l2": #"exp" "G" (#"list" "A")
+      -----------------------------------------------
+      #"list_compare" "l1" "l2" : #"exp" "G" #"comparison"
+  ];
+  [:=
+      "G": #"env",
+      "A": #"ty",
+      "l1": #"exp" "G" (#"list" "A"),
+      "l2": #"exp" "G" (#"list" "A")
+      ----------------------------------------------- ("list_compare_defn")
+      #"compare" "l1" "l2" = #"list_compare" "l1" "l2" : #"exp" "G" #"comparison"
+  ];
+  [:=
+      "G": #"env",
+      "A": #"ty"
+      ----------------------------------------------- ("list_empty_both")
+      #"list_compare" (#"lempty" "A") (#"lempty" "A") = #"Eq" : #"exp" "G" #"comparison"
+  ];
+  [:=
+      "G": #"env",
+      "A": #"ty",
+      "x": #"exp" "G" "A",
+      "l": #"exp" "G" (#"list" "A")
+      ----------------------------------------------- ("list_empty_l")
+      #"list_compare" (#"lempty" "A") (#"cons" "x" "l") = #"Lt" : #"exp" "G" #"comparison"
+  ];
+  [:=
+      "G": #"env",
+      "A": #"ty",
+      "x": #"exp" "G" "A",
+      "l": #"exp" "G" (#"list" "A")
+      ----------------------------------------------- ("list_empty_r")
+      #"list_compare" (#"cons" "x" "l") (#"lempty" "A") = #"Gt" : #"exp" "G" #"comparison"
+  ];
+  [:|
+      "G": #"env",
+      "c1": #"exp" "G" #"comparison",
+      "c2": #"exp" "G" #"comparison"
+      -----------------------------------------------
+      #"list_compare_base" "c1" "c2" : #"exp" "G" #"comparison"
+  ];
+  [:=
+      "G": #"env",
+      "c": #"exp" "G" #"comparison"
+      ----------------------------------------------- ("list_compare_base_lt")
+      #"list_compare_base" #"Lt" "c" = #"Lt" : #"exp" "G" #"comparison"
+  ];
+  [:=
+      "G": #"env",
+      "c": #"exp" "G" #"comparison"
+      ----------------------------------------------- ("list_compare_base_gt")
+      #"list_compare_base" #"Gt" "c" = #"Gt" : #"exp" "G" #"comparison"
+  ];
+  [:=
+      "G": #"env",
+      "c": #"exp" "G" #"comparison"
+      ----------------------------------------------- ("list_compare_base_eq")
+      #"list_compare_base" #"Eq" "c" = "c" : #"exp" "G" #"comparison"
+  ];
+  [:=
+      "G": #"env",
+      "A": #"ty",
+      "x1": #"exp" "G" "A",
+      "l1": #"exp" "G" (#"list" "A"),
+      "x2": #"exp" "G" "A",
+      "l2": #"exp" "G" (#"list" "A")
+      ----------------------------------------------- ("list_induct")
+      #"list_compare" (#"cons" "x1" "l1") (#"cons" "x2" "l2")
+      = #"list_compare_base" (#"compare" "x1" "x2") (#"list_compare" "l1" "l2")
+      : #"exp" "G" #"comparison"
   ]
   ]}.
 
