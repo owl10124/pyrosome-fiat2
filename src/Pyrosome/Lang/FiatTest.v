@@ -82,8 +82,7 @@ Definition fiat_def : lang :=
       #"lempty" "A": #"exp" "G" (#"list" "A")
   ];
 
-  
-  (* unops *)
+  (* unop definitions *)
   [:| 
       "G": #"env",
       "x": #"exp" "G" #"int"
@@ -107,7 +106,7 @@ Definition fiat_def : lang :=
       #"notb" #"false" = #"true": #"exp" "G" #"bool"
   ];
   (* todo *)
-  (* binops *)
+  (* binop definitions *)
   [:|
       "G": #"env",
       "a": #"exp" "G" #"int", "b": #"exp" "G" #"int"
@@ -127,6 +126,21 @@ Definition fiat_def : lang :=
       "l": #"exp" "G" (#"list" "A")
       -----------------------------------------------
       #"cons" "x" "l": #"exp" "G" (#"list" "A")
+  ];
+  [:|  (* can flesh out if i wanted to. but not important? it isn't in fiat2.. *)
+      "G": #"env",
+      "A": #"ty",
+      "l": #"exp" "G" (#"list" "A")
+      -----------------------------------------------
+      #"car" "l": #"exp" "G" (#"list" "A")
+  ];
+  [:|
+      "G": #"env",
+      "A": #"ty",
+      "l1": #"exp" "G" (#"list" "A"),
+      "l2": #"exp" "G" (#"list" "A")
+      -----------------------------------------------
+      #"append" "l1" "l2": #"exp" "G" (#"list" "A")
   ];
   [:| 
       "G": #"env",
@@ -181,6 +195,22 @@ Definition fiat_def : lang :=
       = "false_expr"
       : #"exp" "G" "A"
   ];
+  [:=
+      "G": #"env",
+      "A": #"ty",
+      "l": #"exp" "G" (#"list" "A")
+      -----------------------------------------------  ("append_empty")
+      #"append" (#"lempty" "A") "l" = "l": #"exp" "G" (#"list" "A")
+  ];
+  [:=
+      "G": #"env",
+      "A": #"ty",
+      "l1": #"exp" "G" (#"list" "A"),
+      "l2": #"exp" "G" (#"list" "A"),
+      "x": #"exp" "G" "A"
+      -----------------------------------------------  ("append_nonempty")
+      #"append" (#"cons" "x" "l1") "l2" = #"cons" "x" (#"append" "l1" "l2"): #"exp" "G" (#"list" "A")
+  ];
   [:|
       "G": #"env",
       "A": #"ty",
@@ -201,7 +231,28 @@ Definition fiat_def : lang :=
       "x": #"exp" "G" "A"
       -----------------------------------------------  ("length_induct")
        #"length" (#"cons" "x" "l") = #"1+" (#"length" "l") : #"exp" "G" #"nat"
-      ]
+  ];
+  (* comparison *)
+  (* we probably want to stick to values here, though...? *)
+  [:| 
+      -----------------------------------------------
+      #"cmpr": #"ty"
+  ];
+  [:|
+      "G": #"env"
+      -----------------------------------------------
+      #"Gt": #"exp" "G" #"cmpr"
+  ];
+  [:|
+      "G": #"env"
+      -----------------------------------------------
+      #"Lt": #"exp" "G" #"cmpr"
+  ];
+  [:|
+      "G": #"env"
+      -----------------------------------------------
+      #"Eq": #"exp" "G" #"cmpr"
+  ];
   ]}.
 
 Derive fiat
