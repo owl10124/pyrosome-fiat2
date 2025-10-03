@@ -25,28 +25,28 @@ Definition utlc_def : lang :=
   {[l/subst [exp_subst++value_subst]
   [:| 
       -----------------------------------------------
-      #"T" : #"ty"
+      #"*" : #"ty"
   ];
   [:| "G" : #"env",
-       "e" : #"exp" (#"ext" "G" #"T") #"T"
+       "e" : #"exp" (#"ext" "G" #"*") #"*"
        -----------------------------------------------
-       (* #"lambda" #"T" "e" : #"val" "G" (#"T") *) (* doesn't work *)
-       #"lambda" "e" : #"val" "G" (#"T")
+       (* #"lambda" #"*" "e" : #"val" "G" (#"*") *) (* doesn't work *)
+       #"lambda" "e" : #"val" "G" (#"*")
   ];
   [:| "G" : #"env",
-       "e" : #"exp" "G" #"T",
-       "e'" : #"exp" "G" #"T"
+       "e" : #"exp" "G" #"*",
+       "e'" : #"exp" "G" #"*"
        -----------------------------------------------
-       #"app" "e" "e'" : #"exp" "G" #"T"
+       #"app" "e" "e'" : #"exp" "G" #"*"
   ];
   [:= "G" : #"env",
-      "e" : #"exp" (#"ext" "G" #"T") #"T",
-      "v" : #"val" "G" #"T"
+      "e" : #"exp" (#"ext" "G" #"*") #"*",
+      "v" : #"val" "G" #"*"
       ----------------------------------------------- ("UTLC-beta")
       #"app" (#"ret" (#"lambda" "e")) (#"ret" "v")
-      (* #"app" (#"ret" (#"lambda" #"T" "e")) (#"ret" "v") *) (* doesn't work*)
+      (* #"app" (#"ret" (#"lambda" #"*" "e")) (#"ret" "v") *) (* doesn't work*)
       = #"exp_subst" (#"snoc" #"id" "v") "e"
-      : #"exp" "G" #"T"
+      : #"exp" "G" #"*"
   ]
   ]}.
 
