@@ -10,16 +10,6 @@ Import Core.Notations.
 
 Require Coq.derive.Derive.
 
-(* Locate "#".
-Locate "ext". 
-Locate "snoc". 
-Locate exp_subst. 
-(* Unset Printing Notations.  *)
-Compute exp_subst. 
-Compute exp_subst_def. 
-Compute value_subst. 
-Compute value_subst_def.  *)
-
 
 Definition utlc_def : lang :=
   {[l/subst [exp_subst++value_subst]
@@ -30,7 +20,6 @@ Definition utlc_def : lang :=
   [:| "G" : #"env",
        "e" : #"exp" (#"ext" "G" #"*") #"*"
        -----------------------------------------------
-       (* #"lambda" #"*" "e" : #"val" "G" (#"*") *) (* doesn't work *)
        #"lambda" "e" : #"val" "G" (#"*")
   ];
   [:| "G" : #"env",
@@ -44,13 +33,10 @@ Definition utlc_def : lang :=
       "v" : #"val" "G" #"*"
       ----------------------------------------------- ("UTLC-beta")
       #"app" (#"ret" (#"lambda" "e")) (#"ret" "v")
-      (* #"app" (#"ret" (#"lambda" #"*" "e")) (#"ret" "v") *) (* doesn't work*)
       = #"exp_subst" (#"snoc" #"id" "v") "e"
       : #"exp" "G" #"*"
   ]
   ]}.
-
-  Compute utlc_def.
 
 Derive utlc
        SuchThat (elab_lang_ext (exp_subst++value_subst) utlc_def utlc)
