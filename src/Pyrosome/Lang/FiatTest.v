@@ -12,8 +12,10 @@ Require Coq.derive.Derive.
 
 Compute value_subst_def.
 
+
 Definition fiat_def : lang :=
   {[l/subst [exp_subst++value_subst]
+    (* change everything to val *)
   [:|
       -----------------------------------------------
       #"nat": #"ty"
@@ -297,7 +299,7 @@ Definition fiat_def : lang :=
       -----------------------------------------------
       "cmp" "x1" "x2" : #"exp" "G" #"comparison"
   ];
-     attempt higher-order functions, for record and dict comparison
+     later: attempt taking in higher-order comparator, for record and dict comparison
    *) 
   [:|
       "G": #"env"
@@ -457,6 +459,45 @@ Definition fiat_def : lang :=
       = #"list_compare_base" (#"compare" "x1" "x2") (#"list_compare" "l1" "l2")
       : #"exp" "G" #"comparison"
   ]
+
+    (* tenv            [already done? in RelTransfEx.v] *)
+    (* expr            [already done? in Language.v] *)
+    (* list A          [already done? in Language.v] *)
+    (* string          [built-in] *)
+    (* TRecord         [in Language.v] *)
+    (* locals          [in RelTransfEx.v] *)
+    (* (string * type) [need to define pairs of types, i think we already have it though] *)
+    (* type_wf         [in TypeSystem.v BUT NOT NECESSARY FOR NOW] *)
+    (* tenv_wf         [in TypeSound.v] *)
+    (* type_of         [built-in?]  *)
+    (* locals_wf       [in TypeSound.v] *)
+    (* EFilter         [in Language.v] *)
+    (* interp_expr     [in Interpret.v] *)
+    (* free_immut_in   [in Utils.v] *)
+
+    (* some notes:
+       our environments, tenv, are maps from strings to types.
+
+       tenv_wf checks that an environment is well-formed, i.e. that all defined variables are well-formed.
+       it basically runs type_wf on all definitions in the env.
+
+       type_of i can't find, seems to be in https://rocq-prover.org/doc/v8.19/api/coq-core/Typing/index.html ?? but
+       my intuition is that it's defined somewhere though...
+
+       (map.put Genv x (TRecord f1)) creates a new map, [idk what it actually does yet wait]
+     *)
+
+   (* Theorem efilter_efilter: forall (store env: locals) (Gstore Genv: tenv) (tb p p2: expr) (x y: string) (f1: list (string*type)),
+        tenv_wf Gstore -> tenv_wf Genv -> locals_wf Gstore store -> locals_wf Genv env ->
+        type_of Gstore (map.put Genv x (TRecord f1)) p TBool ->
+        type_of Gstore (map.put Genv y (TRecord f1)) p2 TBool ->
+        type_of Gstore Genv tb (TList (TRecord f1)) ->
+        free_immut_in x p2 = false ->
+        let pnew := EBinop OAnd p (ELet (EVar x) y p2) in
+        interp_expr store env (EFilter (EFilter tb y p2) x p) =
+        interp_expr store env (EFilter tb x pnew). *)
+
+
   ]}.
 
 Derive fiat
