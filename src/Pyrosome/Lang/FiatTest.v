@@ -474,6 +474,25 @@ Definition fiat_def : lang :=
   }. *)
 
     (* wait nvm, i can use ext and ty_ext here? *)
+  [:|
+      ----------------------------------------------- 
+      #"rec_type" : #"ty"
+  ];
+
+  [:|
+      "G": #"env"
+      ----------------------------------------------- 
+      #"rempty" : #"val" "G" #"rec_type"
+  ];
+    
+  [:|
+     "G": #"env",
+     "R": #"val" "G" #"rec_type",
+     "A": #"ty"
+      ----------------------------------------------- 
+      #"cons_record" "R" "A" : #"val" "G" #"rec_type"
+  ];
+
     
   [:|
       ----------------------------------------------- 
@@ -514,10 +533,6 @@ Definition fiat_def : lang :=
       #"pair" "A" "B" : #"ty"
   ];
   [:|
-      ----------------------------------------------- 
-      #"rec_type": #"ty"
-  ];
-  [:|
       "G": #"env",
       "rec_type" : #"ty",
       "tb": #"val" "G" (#"list" "rec_type"),
@@ -554,7 +569,7 @@ Definition fiat_def : lang :=
      ]*)
     (* does it make sense to say? instances of tenv and locals can both be
        instances of #"env", tenv has only types, while locals has the assignments *)
-    (* resolved: tenv *)
+    (* resolved: tenv exists, mutable variables (e.g. locals) do not *)
 
     (* store vs env? ELoc vs EVar? how to unify local and env variables? *)
     (* resolved: don't care bout store for now *)
