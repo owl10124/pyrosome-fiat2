@@ -507,47 +507,39 @@ Definition fiat_def : lang :=
       ----------------------------------------------- 
       #"string" : #"ty"
   ];
-    
   [:|
       "A": #"ty",
       "B": #"ty"
       ----------------------------------------------- 
       #"pair" "A" "B" : #"ty"
   ];
-    
   [:|
-     (* switch to tuples? *)
-     "G" : #"env",
-     "A" : #"ty",
-     "l" : #"val" "G" (#"list" (#"pair" #"string" "A"))
       ----------------------------------------------- 
-      #"record" "l" : #"ty"
-  ];
-
-  (* placeholders; well-formed environments *)
-  [:|
-      "G": #"env"
-      ----------------------------------------------- 
-      #"tenv_wf" "G" : #"env"
+      #"rec_type": #"ty"
   ];
   [:|
-      "G": #"env"
+      "G": #"env",
+      "rec_type" : #"ty",
+      "tb": #"val" "G" (#"list" "rec_type"),
+      "p": #"val" (#"ext" "G" "rec_type") #"bool"
       ----------------------------------------------- 
-      #"locals_wf" "G" : #"env"
+      #"filter" "tb" "p": #"val" "G" (#"list" "rec_type")
   ];
-    (*
+  [:=
+      "G": #"env",
+      "rec_type" : #"ty",
+      "tb": #"val" "G" (#"list" "rec_type"),
+      "p": #"val" (#"ext" "G" "rec_type") #"bool",
+      "p2": #"val" (#"ext" "G" "rec_type") #"bool"
+      ----------------------------------------------- ("filter_filter")
+      #"filter" (#"filter" "tb" "p") "p2" 
+      = #"filter" "tb" (#"andb" "p" "p2")
+      : #"val" "G" (#"list" "rec_type")
+   ]
+  (*
   [:|
       "store": #"env",
       "env": #"env",
-      "expr": #"exp"
-      ----------------------------------------------- 
-      #"interp_expr" "store" "env" "expr" : #"exp"
-  ];
-    *)
-  [:|
-      "store": #"env",
-      "env": #"env",
-     (* "Gstore": #"env",  <-- not able to write rules for mutables*)
       "Genv": #"env",
       "G": #"env",
       "A": #"ty",
@@ -559,7 +551,7 @@ Definition fiat_def : lang :=
       (* interp_expr *)
       ----------------------------------------------- 
       #"test": #"env"
-  ]
+     ]*)
     (* does it make sense to say? instances of tenv and locals can both be
        instances of #"env", tenv has only types, while locals has the assignments *)
     (* resolved: tenv *)
