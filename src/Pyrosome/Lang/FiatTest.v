@@ -105,8 +105,36 @@ Definition fiat_def : lang :=
       ----------------------------------------------- ("not_false")
       #"notb" #"false" = #"true": #"val" "G" #"bool"
   ];
+  [:|
+      "G": #"env",
+      "a": #"val" "G" #"bool", "b": #"val" "G" #"bool"
+      -----------------------------------------------
+      #"andb" "a" "b": #"val" "G" #"bool"
+  ];
+  [:|
+      "G": #"env",
+      "a": #"val" "G" #"bool", "b": #"val" "G" #"bool"
+      -----------------------------------------------
+      #"orb" "a" "b": #"val" "G" #"bool"
+  ];
+  [:=
+      "G": #"env"
+      ----------------------------------------------- ("and_true")
+      #"andb" #"true" #"true" = #"true": #"val" "G" #"bool"
+  ];
+  [:=
+      "G": #"env", "b": #"val" "G" #"bool"
+      ----------------------------------------------- ("and_false_l")
+      #"andb" #"false" "b" = #"false": #"val" "G" #"bool"
+  ];
+  [:=
+      "G": #"env", "b": #"val" "G" #"bool"
+      ----------------------------------------------- ("and_false_r")
+      #"andb" "b" #"false" = #"false": #"val" "G" #"bool"
+  ];
   (* todo *)
   (* binop definitions *)
+    (*
   [:|
       "G": #"env",
       "a": #"val" "G" #"nat", "b": #"val" "G" #"nat"
@@ -138,65 +166,6 @@ Definition fiat_def : lang :=
       ----------------------------------------------- ("add_Sn_m")
       #"+" (#"1+" "a") "b"  = #"1+" (#"+" "a" "b")
       : #"val" "G" #"nat"
-  ];
-  [:|
-      "G": #"env",
-      "a": #"val" "G" #"bool", "b": #"val" "G" #"bool"
-      -----------------------------------------------
-      #"andb" "a" "b": #"val" "G" #"bool"
-  ];
-  [:|
-      "G": #"env",
-      "a": #"val" "G" #"bool", "b": #"val" "G" #"bool"
-      -----------------------------------------------
-      #"orb" "a" "b": #"val" "G" #"bool"
-  ];
-  [:|
-      "G": #"env",
-      "A": #"ty",
-      "x": #"val" "G" "A",
-      "l": #"val" "G" (#"list" "A")
-      -----------------------------------------------
-      #"cons" "x" "l": #"val" "G" (#"list" "A")
-  ];
-  [:|  (* can flesh out if i wanted to. but not important? it isn't in fiat2.. *)
-      "G": #"env",
-      "A": #"ty",
-      "l": #"val" "G" (#"list" "A")
-      -----------------------------------------------
-      #"car" "l": #"val" "G" (#"list" "A")
-  ];
-  [:|
-      "G": #"env",
-      "A": #"ty",
-      "l1": #"val" "G" (#"list" "A"),
-      "l2": #"val" "G" (#"list" "A")
-      -----------------------------------------------
-      #"append" "l1" "l2": #"val" "G" (#"list" "A")
-  ];
-  [:| 
-      "G": #"env",
-      "A": #"ty",
-      "l": #"val" "G" (#"list" "A"),
-      "n": #"val" "G" #"nat"
-      -----------------------------------------------
-      #"repeat" "l" "n": #"val" "G" (#"list" "A")
-  ];
-  (* expr *)
-  [:=
-      "G": #"env"
-      ----------------------------------------------- ("and_true")
-      #"andb" #"true" #"true" = #"true": #"val" "G" #"bool"
-  ];
-  [:=
-      "G": #"env", "b": #"val" "G" #"bool"
-      ----------------------------------------------- ("and_false_l")
-      #"andb" #"false" "b" = #"false": #"val" "G" #"bool"
-  ];
-  [:=
-      "G": #"env", "b": #"val" "G" #"bool"
-      ----------------------------------------------- ("and_false_r")
-      #"andb" "b" #"false" = #"false": #"val" "G" #"bool"
   ];
   [:=
       "G": #"env"
@@ -242,6 +211,39 @@ Definition fiat_def : lang :=
       = "false_expr"
       : #"val" "G" "A"
   ];
+*)
+  [:|
+      "G": #"env",
+      "A": #"ty",
+      "x": #"val" "G" "A",
+      "l": #"val" "G" (#"list" "A")
+      -----------------------------------------------
+      #"cons" "x" "l": #"val" "G" (#"list" "A")
+  ];
+  [:|  (* can flesh out if i wanted to. but not important? it isn't in fiat2.. *)
+      "G": #"env",
+      "A": #"ty",
+      "l": #"val" "G" (#"list" "A")
+      -----------------------------------------------
+      #"car" "l": #"val" "G" (#"list" "A")
+  ];
+  [:|
+      "G": #"env",
+      "A": #"ty",
+      "l1": #"val" "G" (#"list" "A"),
+      "l2": #"val" "G" (#"list" "A")
+      -----------------------------------------------
+      #"append" "l1" "l2": #"val" "G" (#"list" "A")
+  ];
+  [:| 
+      "G": #"env",
+      "A": #"ty",
+      "l": #"val" "G" (#"list" "A"),
+      "n": #"val" "G" #"nat"
+      -----------------------------------------------
+      #"repeat" "l" "n": #"val" "G" (#"list" "A")
+  ];
+  (* expr *)
   [:=
       "G": #"env",
       "A": #"ty",
@@ -302,6 +304,7 @@ Definition fiat_def : lang :=
   ];
      later: attempt taking in higher-order comparator, for record and dict comparison
    *) 
+    (*
   [:|
       "G": #"env"
       -----------------------------------------------
@@ -460,6 +463,7 @@ Definition fiat_def : lang :=
       = #"list_compare_base" (#"compare" "x1" "x2") (#"list_compare" "l1" "l2")
       : #"val" "G" #"comparison"
   ];
+*)
   (* maps, placeholder for now *)
   (* Class map {key value} := mk {
     rep : Type;
@@ -473,16 +477,12 @@ Definition fiat_def : lang :=
     fold{R: Type}: (R -> key -> value -> R) -> R -> rep -> R;
   }. *)
 
-    (* wait nvm, i can use ext and ty_ext here? *)
+    (* OLD ONE DON'T USE I GUESS
   [:|
+      "G": #"env",
+      "l" : #"list_ty"
       ----------------------------------------------- 
-      #"rec_type" : #"ty"
-  ];
-
-  [:|
-      "G": #"env"
-      ----------------------------------------------- 
-      #"rempty" : #"val" "G" #"rec_type"
+      #"rempty" : #"val" "G" #"record"
   ];
     
   [:|
@@ -491,9 +491,11 @@ Definition fiat_def : lang :=
      "A": #"ty"
       ----------------------------------------------- 
       #"cons_record" "R" "A" : #"val" "G" #"rec_type"
-  ];
+  ]
+*)
 
     
+    (*
   [:|
       ----------------------------------------------- 
       #"map" : #"ty"
@@ -519,9 +521,11 @@ Definition fiat_def : lang :=
       ----------------------------------------------- 
       #"get" : #"ty"
   ];
+*)
 
   (* strings and record types, placeholder *)
     
+    (*
   [:|
       ----------------------------------------------- 
       #"string" : #"ty"
@@ -532,25 +536,113 @@ Definition fiat_def : lang :=
       ----------------------------------------------- 
       #"pair" "A" "B" : #"ty"
   ];
+*)
+  [s|
+      ----------------------------------------------- 
+      #"list_ty" srt
+  ];
+  [:|
+      ----------------------------------------------- 
+      #"empty_list_ty" : #"list_ty"
+  ];
+  [:|
+      "A": #"ty",
+      "l": #"list_ty"
+      ----------------------------------------------- 
+      #"cons_list_ty" "A" "l" : #"list_ty"
+  ];
+
+    (* wait nvm, i can use ext and ty_ext here? *)
+  [:|
+     "l" : #"list_ty"
+      ----------------------------------------------- 
+      #"Trecord" "l" : #"ty"
+  ];
+
+  [:|
+      "G": #"env"
+      ----------------------------------------------- 
+      #"empty_record" : #"val" "G" (#"Trecord" #"empty_list_ty")
+  ];
+
   [:|
       "G": #"env",
-      "rec_type" : #"ty",
-      "tb": #"val" "G" (#"list" "rec_type"),
-      "p": #"val" (#"ext" "G" "rec_type") #"bool"
+      "A": #"ty",
+      "l": #"list_ty",
+      "v": #"val" "G" "A",
+      "record_val" : #"val" "G" (#"Trecord" "l")
       ----------------------------------------------- 
-      #"filter" "tb" "p": #"val" "G" (#"list" "rec_type")
+      #"cons_record" "v" "record_val" : #"val" "G" (#"Trecord" (#"cons_list_ty" "A" "l"))
   ];
+
+  [:|
+      "G": #"env",
+      "l": #"list_ty",
+      "tb": #"val" "G" (#"list" (#"Trecord" "l")),
+      "p": #"val" (#"ext" "G" (#"Trecord" "l")) #"bool"
+      ----------------------------------------------- 
+      #"filter" "tb" "p": #"val" "G" (#"list" (#"Trecord" "l"))
+  ];
+    
+  [:=
+      "G": #"env",
+      "f1": #"list_ty",
+      "tb": #"val" "G" (#"list" (#"Trecord" "f1")),
+      "p": #"val" (#"ext" "G" (#"Trecord" "f1")) #"bool",
+      "p2": #"val" (#"ext" "G" (#"Trecord" "f1")) #"bool"
+      ----------------------------------------------- ("filter_filter_list_ty")
+      #"filter" (#"filter" "tb" "p") "p2" 
+      = #"filter" "tb" (#"andb" "p" "p2")
+      : #"val" "G" (#"list" (#"Trecord" "f1")) (* same columns, right? *)
+   ] ;
+    (*
   [:=
       "G": #"env",
       "rec_type" : #"ty",
       "tb": #"val" "G" (#"list" "rec_type"),
       "p": #"val" (#"ext" "G" "rec_type") #"bool",
       "p2": #"val" (#"ext" "G" "rec_type") #"bool"
-      ----------------------------------------------- ("filter_filter")
+      ----------------------------------------------- ("filter_filter_generic")
       #"filter" (#"filter" "tb" "p") "p2" 
       = #"filter" "tb" (#"andb" "p" "p2")
       : #"val" "G" (#"list" "rec_type")
-   ]
+   ];
+*)
+    
+  [:|
+      "G": #"env",
+      "t1": #"ty",
+      "t2": #"ty",
+      "tb": #"val" "G" (#"list" "t1"), (* can be any tpye *)
+      "p": #"val" (#"ext" "G" "t2") #"bool"
+      -----------------------------------------------  
+      #"proj" "tb" "p": #"val" "G" (#"list" "t2") (* probably want a subset of it... *)
+  ] (*;
+  [:|
+      "G": #"env",
+      "f1": #"list_ty",
+      "tbl": #"val" "G" (#"list" (#"Trecord" "f1")),
+      "p": #"val" (#"ext" "G" (#"Trecord" "f1")) #"bool",
+      "r": #"val" (#"ext" "G" (#"Trecord" "f1")) #"bool"
+      ----------------------------------------------- 
+      #"proj" (#"filter" "tbl" "p") "r" =
+      #"proj" (#"filter" (#"proj" "tbl" : #"val" "G" (#"list" (#"Trecord" "l"))
+  ]*)
+
+    (*     Theorem proj_pushdown_filter: forall (store env: locals) (Gstore Genv: tenv) (tbl p r:expr) (x xi xp:string)
+      (pcols rcols: list string) (f1: list (string * type)) (t: type),
+      tenv_wf Gstore -> tenv_wf Genv ->
+      locals_wf Gstore store -> locals_wf Genv env ->
+      type_of Gstore (map.put Genv x (TRecord f1)) p TBool ->
+      type_of Gstore (map.put Genv xp (TRecord f1)) r t ->
+      type_of Gstore Genv tbl (TList (TRecord f1)) ->
+      cols x p = Some pcols ->
+      cols xp r = Some rcols ->
+      let columns := dedup String.eqb (pcols ++ rcols) in
+      let ri := make_record xi columns in
+      interp_expr store env (EProj (EFilter tbl x p) xp r) =
+      interp_expr store env (EProj (EFilter (EProj tbl xi ri) x p) xp r). *)
+
   (*
   [:|
       "store": #"env",
@@ -613,6 +705,8 @@ Definition fiat_def : lang :=
   ]}.
 
 Compute fiat_def.
+
+Print fiat_def.
 
 Derive fiat
   SuchThat (elab_lang_ext (exp_subst++value_subst) fiat_def fiat)
