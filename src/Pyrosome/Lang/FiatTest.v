@@ -5,7 +5,7 @@ Import ListNotations.
 Open Scope string.
 Open Scope list.
 From Utils Require Import Utils.
-From Pyrosome Require Import Theory.Core Elab.Elab Tools.Matches Lang.SimpleVSubst.
+From Pyrosome Require Import Theory.Core Elab.Elab Tools.Matches Lang.SimpleVSubst Tools.EGraph.Automation Tools.EGraph.Defs.
 Import Core.Notations.
 
 Require Coq.derive.Derive.
@@ -132,6 +132,10 @@ Definition fiat_def : lang :=
       ----------------------------------------------- ("and_false_r")
       #"andb" "b" #"false" = #"false": #"val" "G" #"bool"
   ];
+  [:|
+      ----------------------------------------------- 
+      #"EMP": #"env"
+  ];
   (* todo *)
   (* binop definitions *)
     (*
@@ -167,6 +171,7 @@ Definition fiat_def : lang :=
       #"+" (#"1+" "a") "b"  = #"1+" (#"+" "a" "b")
       : #"val" "G" #"nat"
   ];
+*)
   [:=
       "G": #"env"
       ----------------------------------------------- ("or_false")
@@ -211,7 +216,6 @@ Definition fiat_def : lang :=
       = "false_expr"
       : #"val" "G" "A"
   ];
-*)
   [:|
       "G": #"env",
       "A": #"ty",
@@ -584,6 +588,16 @@ Definition fiat_def : lang :=
       #"filter" "tb" "p": #"val" "G" (#"list" (#"Trecord" "l"))
   ];
     
+    (*
+      Theorem efilter_efilter: forall (store env: locals) (Gstore Genv: tenv) (tb p p2: expr) (x y: string) (f1: list (string*type)),
+        tenv_wf Gstore -> tenv_wf Genv -> locals_wf Gstore store -> locals_wf Genv env ->
+        type_of Gstore (map.put Genv x (TRecord f1)) p TBool ->
+        type_of Gstore (map.put Genv y (TRecord f1)) p2 TBool ->
+        type_of Gstore Genv tb (TList (TRecord f1)) ->
+        free_immut_in x p2 = false ->
+        let pnew := EBinop OAnd p (ELet (EVar x) y p2) in
+        interp_expr store env (EFilter (EFilter tb y p2) x p) =
+        interp_expr store env (EFilter tb x pnew). *)
   [:=
       "G": #"env",
       "f1": #"list_ty",
@@ -594,7 +608,7 @@ Definition fiat_def : lang :=
       #"filter" (#"filter" "tb" "p") "p2" 
       = #"filter" "tb" (#"andb" "p" "p2")
       : #"val" "G" (#"list" (#"Trecord" "f1")) (* same columns, right? *)
-   ] ;
+   ];
     (*
   [:=
       "G": #"env",
@@ -609,15 +623,120 @@ Definition fiat_def : lang :=
    ];
 *)
     
+    (* proj
+  | TyEProj e t1 x r t2 : type_of Gstore Genv e (TList t1) ->
+                          type_of Gstore (map.put Genv x t1) r t2 ->
+                          type_of Gstore Genv (EProj e x r) (TList t2).
+     *)
+
   [:|
       "G": #"env",
       "t1": #"ty",
       "t2": #"ty",
-      "tb": #"val" "G" (#"list" "t1"), (* can be any tpye *)
-      "p": #"val" (#"ext" "G" "t2") #"bool"
+      "e": #"val" "G" (#"list" "t1"), (* can be any tpye *)
+      "r": #"val" (#"ext" "G" "t1") "t2"
       -----------------------------------------------  
-      #"proj" "tb" "p": #"val" "G" (#"list" "t2") (* probably want a subset of it... *)
-  ] (*;
+      #"proj" "e" "r": #"val" "G" (#"list" "t2") (* probably want a subset of it... *)
+  ];
+
+    (* join
+  | TyEJoin e1 t1 e2 t2 x y p r t3 : type_of Gstore Genv e1 (TList t1) ->
+                                     type_of Gstore Genv e2 (TList t2) ->
+                                     type_of Gstore (map.put (map.put Genv x t1) y t2) p TBool ->
+                                     type_of Gstore (map.put (map.put Genv x t1) y t2) r t3 ->
+                                     type_of Gstore Genv (EJoin e1 e2 x y p r) (TList t3)
+       *)
+  [:|
+     "G":  #"env",
+     "t1": #"ty",
+     "t2": #"ty",
+     "t3": #"ty",
+     "e1": #"val" "G" (#"list" "t1"),
+     "e2": #"val" "G" (#"list" "t2"),
+     "p":  #"val" (#"ext" (#"ext" "G" "t1") "t2") #"bool",
+     "r":  #"val" (#"ext" (#"ext" "G" "t1") "t2") "t3"
+      -----------------------------------------------  
+     #"join" "e1" "e2" "p" "r": #"val" "G" (#"list" "t3")
+  ]
+
+(*
+    Theorem proj_proj: forall (store env: locals) (Gstore Genv: tenv) (tb r r2: expr) (x x2: string) (r2cols rcols: list string),
+        free_immut_in x2 r = false ->
+        let rnew := ELet r2 x r in
+        interp_expr store env (EProj (EProj tb x2 r2) x r) =
+        interp_expr store env (EProj tb x2 rnew).
+*)
+    (*
+    [:=
+      "G": #"env",
+      "t1": #"ty",
+      "t2": #"ty",
+      "t3": #"ty",
+      "tb": #"val" "G" (#"list" "t1"), 
+      "r": #"val" (#"ext" "G" "t2") "t3",
+      "r2": #"val" (#"ext" "G" "t1") "t2",
+      "rnew": #"val" (#"ext" "G" "t1") "t3"
+      ----------------------------------------------- ("proj_proj")
+      #"proj" (#"proj" "tb" "r2") "r" = #"proj" "tb" "rnew": #"val" "G" (#"list" "t3")
+    ];
+*)
+    (*
+    Theorem filter_into_join_left: forall (store env: locals) (Gstore Genv: tenv) (tb1 tb2 p r pf: expr) (x y xf: string) (f1 f2: list (string * type)),
+        tenv_wf Gstore -> tenv_wf Genv -> locals_wf Gstore store -> locals_wf Genv env ->
+        type_of Gstore (map.put (map.put Genv x (TRecord f1)) y (TRecord f2)) p TBool ->
+        type_of Gstore (map.put Genv xf (TRecord f1)) pf TBool ->
+        type_of Gstore Genv tb1 (TList (TRecord f1)) ->
+        type_of Gstore Genv tb2 (TList (TRecord f2)) ->
+        free_immut_in x pf = false ->
+        free_immut_in y pf = false ->
+        x <> y ->
+        let pnew := EBinop OAnd p (ELet (EVar x) xf pf) in
+        interp_expr store env (EJoin (EFilter tb1 xf pf) tb2 x y p r)
+        = interp_expr store env (EJoin tb1 tb2 x y pnew r). *)
+    (*
+    [:=
+       "G":   #"env",
+       "f1":  #"list_ty",
+       "f2":  #"list_ty",
+       "t":   #"ty",
+       "p":   #"val" (#"ext" (#"ext" "G" (#"Trecord" "f1")) (#"Trecord" "f2")) #"bool",
+       "r":   #"val" (#"ext" (#"ext" "G" (#"Trecord" "f1")) (#"Trecord" "f2")) "t", (* what's the type of this? *)
+       "pf":  #"val" (#"ext" "G" (#"Trecord" "f1")) #"bool",
+       "tb1": #"val" "G" (#"list" (#"Trecord" "f1")),
+       "tb2": #"val" "G" (#"list" (#"Trecord" "f2"))
+      ----------------------------------------------- ("filter_into_join_left")
+      #"join" (#"filter" "tb1" "pf") "tb2" "p" "r" = #"join" "tb1" "tb2" (#"andb" "p" "pf") "r" : #"val" "G" (#"list" "t")
+    ]
+     *)
+      (*
+    Theorem proj_into_join: forall (store env: locals) (Gstore Genv: tenv) (t1 t2 p r rp: expr) (x y xp: string),
+       x <> y ->
+       xp <> x ->
+       xp <> y ->
+       free_immut_in x rp = false ->
+       free_immut_in y rp = false ->
+       let rnew := ELet r xp rp in
+       interp_expr store env (EProj (EJoin t1 t2 x y p r) xp rp) =
+       interp_expr store env (EJoin t1 t2 x y p rnew). *)
+
+      (*
+    Theorem filter_into_join_right: forall(store env: locals) (Gstore Genv: tenv) (tb1 tb2 p r pf: expr) (x y yf: string) (f1 f2: list (string * type)),
+        tenv_wf Gstore -> tenv_wf Genv -> locals_wf Gstore store -> locals_wf Genv env ->
+        type_of Gstore (map.put (map.put Genv x (TRecord f1)) y (TRecord f2)) p TBool ->
+        type_of Gstore (map.put Genv yf (TRecord f2)) pf TBool ->
+        type_of Gstore Genv tb1 (TList (TRecord f1)) ->
+        type_of Gstore Genv tb2 (TList (TRecord f2)) ->
+        free_immut_in x pf = false ->
+        free_immut_in y pf = false ->
+        x <> y ->
+        let pnew := EBinop OAnd p (ELet (EVar y) yf pf) in
+        interp_expr store env (EJoin tb1 (EFilter tb2 yf pf) x y p r)
+        = interp_expr store env (EJoin tb1 tb2 x y pnew r). *)
+
+
+
+
+    (* pushdown_filter
   [:|
       "G": #"env",
       "f1": #"list_ty",
@@ -627,7 +746,7 @@ Definition fiat_def : lang :=
       ----------------------------------------------- 
       #"proj" (#"filter" "tbl" "p") "r" =
       #"proj" (#"filter" (#"proj" "tbl" : #"val" "G" (#"list" (#"Trecord" "l"))
-  ]*)
+  ] *)
 
     (*     Theorem proj_pushdown_filter: forall (store env: locals) (Gstore Genv: tenv) (tbl p r:expr) (x xi xp:string)
       (pcols rcols: list string) (f1: list (string * type)) (t: type),
@@ -706,10 +825,65 @@ Definition fiat_def : lang :=
 
 Compute fiat_def.
 
-Print fiat_def.
+(* filter to term_eq rules
+   bundle into a rule_set
+   call egraph_simpl *)
+
 
 Derive fiat
   SuchThat (elab_lang_ext (exp_subst++value_subst) fiat_def fiat)
        As fiat_wf.
 Proof. auto_elab. Qed.
 #[export] Hint Resolve fiat_wf : elab_pfs.
+
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 []
+  {{e#"andb" #"emp" (#"true" #"emp") (#"true" #"emp")}}.
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 []
+  {{e#"andb" #"emp" (#"true" #"emp") (#"false" #"emp")}}.
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 []
+  {{e#"andb" #"emp" (#"false" #"emp") (#"false" #"emp")}}.
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 []
+  {{e#"andb" #"emp" (#"false" #"emp") (#"true" #"emp")}}.
+
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 []
+  {{e#"notb" #"emp" (#"false" #"emp")}}.
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 []
+  {{e#"notb" #"emp" (#"true" #"emp")}}.
+
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 100 100 2000 []
+  {{e#"andb" #"emp" (#"notb" #"emp" (#"true" #"emp")) (#"notb" #"emp" (#"true" #"emp"))}}.
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 100 100 2000 []
+  {{e#"andb" #"emp" (#"notb" #"emp" (#"true" #"emp")) (#"notb" #"emp" (#"false" #"emp"))}}.
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 100 100 2000 []
+  {{e#"andb" #"emp" (#"notb" #"emp" (#"false" #"emp")) (#"notb" #"emp" (#"true" #"emp"))}}.
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 100 100 2000 []
+  {{e#"andb" #"emp" (#"notb" #"emp" (#"false" #"emp")) (#"notb" #"emp" (#"false" #"emp"))}}.
+
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 [("x", {{s#"val" #"emp" #"bool"}})]
+  {{e#"andb" #"emp" "x" (#"false" #"emp")}}.
+
+Compute fiat.
+
+Compute PositiveInstantiation.egraph_simpl' fiat 100 100 2000 []
+  {{e#"notb" #"EMP" (#"andb" #"EMP" (#"true" #"EMP") (#"false" #"EMP"))}}.
+
+(* next step: slightly larger program *)
+
+(*
+  [:=
+      "G": #"env",
+      "f1": #"list_ty",
+      "tb": #"val" "G" (#"list" (#"Trecord" "f1")),
+      "p": #"val" (#"ext" "G" (#"Trecord" "f1")) #"bool",
+      "p2": #"val" (#"ext" "G" (#"Trecord" "f1")) #"bool"
+      ----------------------------------------------- ("filter_filter_list_ty")
+      #"filter" (#"filter" "tb" "p") "p2" 
+      = #"filter" "tb" (#"andb" "p" "p2")
+      : #"val" "G" (#"list" (#"Trecord" "f1")) (* same columns, right? *)
+   ];
+ *)
+
+Compute fiat.
+
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 100 100 2000 []
+  {{e#"filter" #"emp" #"empty_list_ty" (#"filter" #"emp" #"empty_list_ty" (#"lempty" #"emp" (#"Trecord" #"empty_list_ty")) (#"true" #"emp")) (#"false" #"emp") }}.
