@@ -657,7 +657,7 @@ Definition fiat_def : lang :=
      "r":  #"val" (#"ext" (#"ext" "G" "t1") "t2") "t3"
       -----------------------------------------------  
      #"join" "e1" "e2" "p" "r": #"val" "G" (#"list" "t3")
-  ]
+  ];
 
 (*
     Theorem proj_proj: forall (store env: locals) (Gstore Genv: tenv) (tb r r2: expr) (x x2: string) (r2cols rcols: list string),
@@ -666,7 +666,6 @@ Definition fiat_def : lang :=
         interp_expr store env (EProj (EProj tb x2 r2) x r) =
         interp_expr store env (EProj tb x2 rnew).
 *)
-    (*
     [:=
       "G": #"env",
       "t1": #"ty",
@@ -674,12 +673,10 @@ Definition fiat_def : lang :=
       "t3": #"ty",
       "tb": #"val" "G" (#"list" "t1"), 
       "r": #"val" (#"ext" "G" "t2") "t3",
-      "r2": #"val" (#"ext" "G" "t1") "t2",
-      "rnew": #"val" (#"ext" "G" "t1") "t3"
+      "r2": #"val" (#"ext" "G" "t1") "t2"
       ----------------------------------------------- ("proj_proj")
-      #"proj" (#"proj" "tb" "r2") "r" = #"proj" "tb" "rnew": #"val" "G" (#"list" "t3")
-    ];
-*)
+      #"proj" (#"proj" "tb" "r2") "r" = #"proj" "tb" (#"val_subst" (#"snoc" #"wkn" "r2") "r"): #"val" "G" (#"list" "t3")
+    ]
     (*
     Theorem filter_into_join_left: forall (store env: locals) (Gstore Genv: tenv) (tb1 tb2 p r pf: expr) (x y xf: string) (f1 f2: list (string * type)),
         tenv_wf Gstore -> tenv_wf Genv -> locals_wf Gstore store -> locals_wf Genv env ->
@@ -836,6 +833,8 @@ Derive fiat
 Proof. auto_elab. Qed.
 #[export] Hint Resolve fiat_wf : elab_pfs.
 
+Compute fiat.
+
 Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 []
   {{e#"andb" #"emp" (#"true" #"emp") (#"true" #"emp")}}.
 Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 []
@@ -850,13 +849,13 @@ Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 []
 Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 []
   {{e#"notb" #"emp" (#"true" #"emp")}}.
 
-Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 100 100 2000 []
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 10 10 200 []
   {{e#"andb" #"emp" (#"notb" #"emp" (#"true" #"emp")) (#"notb" #"emp" (#"true" #"emp"))}}.
-Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 100 100 2000 []
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 10 10 200 []
   {{e#"andb" #"emp" (#"notb" #"emp" (#"true" #"emp")) (#"notb" #"emp" (#"false" #"emp"))}}.
-Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 100 100 2000 []
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 10 10 200 []
   {{e#"andb" #"emp" (#"notb" #"emp" (#"false" #"emp")) (#"notb" #"emp" (#"true" #"emp"))}}.
-Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 100 100 2000 []
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 10 10 200 []
   {{e#"andb" #"emp" (#"notb" #"emp" (#"false" #"emp")) (#"notb" #"emp" (#"false" #"emp"))}}.
 
 Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 [("x", {{s#"val" #"emp" #"bool"}})]
@@ -883,7 +882,13 @@ Compute PositiveInstantiation.egraph_simpl' fiat 100 100 2000 []
    ];
  *)
 
-Compute fiat.
-
 Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 100 100 2000 []
   {{e#"filter" #"emp" #"empty_list_ty" (#"filter" #"emp" #"empty_list_ty" (#"lempty" #"emp" (#"Trecord" #"empty_list_ty")) (#"true" #"emp")) (#"false" #"emp") }}.
+
+Compute fiat.
+
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 1 [("tb", {{s#"cons" #"true" (#"lempty" #"bool")}})]
+  {{e#"proj" #"emp" #"bool" #"bool" (#"proj" #"emp" #"bool" #"bool" (#"lempty" #"emp" #"bool") (#"notb" (#"ext" #"emp" #"bool") (#"true" (#"ext" #"emp" #"bool")))) (#"notb" (#"ext" #"emp" #"bool")  (#"false" (#"ext" #"emp" #"bool")))}}.
+
+Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 3 3 4 [("tb", {{s#"cons" #"true" (#"lempty" #"bool")}})]
+  {{e#"proj" #"emp" #"bool" #"bool" (#"proj" #"emp" #"bool" #"bool" (#"lempty" #"emp" #"bool") (#"notb" (#"ext" #"emp" #"bool") (#"true" (#"ext" #"emp" #"bool")))) (#"notb" (#"ext" #"emp" #"bool")  (#"true" (#"ext" #"emp" #"bool")))}}.
