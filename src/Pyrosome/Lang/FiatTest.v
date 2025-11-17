@@ -676,6 +676,7 @@ Definition fiat_def : lang :=
       "r2": #"val" (#"ext" "G" "t1") "t2"
       ----------------------------------------------- ("proj_proj")
       #"proj" (#"proj" "tb" "r2") "r" = #"proj" "tb" (#"val_subst" (#"snoc" #"wkn" "r2") "r"): #"val" "G" (#"list" "t3")
+                                                        (* #"sub" (#"ext" "G" "t1") (#"ext" "G" "t2") *)
     ];
     (*
     Theorem filter_into_join_left: forall (store env: locals) (Gstore Genv: tenv) (tb1 tb2 p r pf: expr) (x y xf: string) (f1 f2: list (string * type)),
@@ -705,7 +706,7 @@ Definition fiat_def : lang :=
                                                        (#"andb" "p"
                                                                 (#"val_subst" #"wkn" "pf"))
                                                        "r" : #"val" "G" (#"list" "t")
-    ]
+    ];
       (*
     Theorem filter_into_join_right: forall(store env: locals) (Gstore Genv: tenv) (tb1 tb2 p r pf: expr) (x y yf: string) (f1 f2: list (string * type)),
         tenv_wf Gstore -> tenv_wf Genv -> locals_wf Gstore store -> locals_wf Genv env ->
@@ -719,7 +720,6 @@ Definition fiat_def : lang :=
         let pnew := EBinop OAnd p (ELet (EVar y) yf pf) in
         interp_expr store env (EJoin tb1 (EFilter tb2 yf pf) x y p r)
         = interp_expr store env (EJoin tb1 tb2 x y pnew r). *)
-    (*
     [:=
        "G":   #"env",
        "f1":  #"list_ty",
@@ -734,13 +734,10 @@ Definition fiat_def : lang :=
       #"join" "tb1" (#"filter" "tb2" "pf") "p" "r" = #"join" "tb1" "tb2"
                                                        (#"andb" "p"
                                                           (#"val_subst"
-                                                             (#"cmp" #"wkn"
-                                                               (#"cmp" #"wkn"
-                                                                 (#"snoc" #"wkn" "pf")))
+                                                             (#"snoc" (#"cmp" #"wkn" #"wkn") #"hd")
                                                              "pf"))
                                                        "r" : #"val" "G" (#"list" "t")
-    ]
-     *)
+    ];
 
       (*
     Theorem proj_into_join: forall (store env: locals) (Gstore Genv: tenv) (t1 t2 p r rp: expr) (x y xp: string),
@@ -752,7 +749,6 @@ Definition fiat_def : lang :=
        let rnew := ELet r xp rp in
        interp_expr store env (EProj (EJoin t1 t2 x y p r) xp rp) =
        interp_expr store env (EJoin t1 t2 x y p rnew). *)
-    (*
     [:=
        "G":   #"env",
        "ty1": #"ty",
@@ -761,19 +757,18 @@ Definition fiat_def : lang :=
        "ty4": #"ty",
        "t1":  #"val" "G" (#"list" "ty1"),
        "t2":  #"val" "G" (#"list" "ty2"),
-       "p":   #"val" (#"ext" (#"ext" "G" "ty1") "ty2") "ty3",
+       "p":   #"val" (#"ext" (#"ext" "G" "ty1") "ty2") #"bool",
        "r":   #"val" (#"ext" (#"ext" "G" "ty1") "ty2") "ty3",
        "rp":  #"val" (#"ext" "G" "ty3") "ty4"
       ----------------------------------------------- ("proj_into_join")
       #"proj" (#"join" "t1" "t2" "p" "r") "rp" = #"join" "t1" "t2" "p"
                                                    (#"val_subst"
-                                                      (#"cmp" #"wkn" (#"snoc" #"wkn" "r"))
+                                                      (#"snoc" (#"cmp" #"wkn" #"wkn") "r")
                                                       "rp") :
                                                    #"val" "G" (#"list" "ty4")
     ]
-     *)
 
-    (* pushdown_filter
+      (*
   [:|
       "G": #"env",
       "f1": #"list_ty",
@@ -783,7 +778,8 @@ Definition fiat_def : lang :=
       ----------------------------------------------- 
       #"proj" (#"filter" "tbl" "p") "r" =
       #"proj" (#"filter" (#"proj" "tbl" : #"val" "G" (#"list" (#"Trecord" "l"))
-  ] *)
+  ]
+*)
 
     (*     Theorem proj_pushdown_filter: forall (store env: locals) (Gstore Genv: tenv) (tbl p r:expr) (x xi xp:string)
       (pcols rcols: list string) (f1: list (string * type)) (t: type),
@@ -873,17 +869,6 @@ Derive fiat
 Proof. auto_elab. Qed.
 #[export] Hint Resolve fiat_wf : elab_pfs.
 
-Compute fiat.
-Compute value_subst.
-
-Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 5 5 20 [("G", {{s#"env"}}); ("f1", {{s#"list_ty"}}); ("pf", {{s#"val" (#"ext" "G" (#"Trecord" "f1")) #"bool"}})]
-  {{e#"val_subst" (#"snoc" #"wkn" "pf") "pf"}}.
-
-(*
-       "pf":  #"val" (#"ext" "G" (#"Trecord" "f2")) #"bool",
-    (#"val_subst" (#"snoc" (#"ext" "G" "f1") "G" (#"wkn" "G" "f1") "pf") "pf")
-*)
-
 Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 []
   {{e#"andb" #"emp" (#"true" #"emp") (#"true" #"emp")}}.
 Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 []
@@ -906,6 +891,9 @@ Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 10 10 200 []
   {{e#"andb" #"emp" (#"notb" #"emp" (#"false" #"emp")) (#"notb" #"emp" (#"true" #"emp"))}}.
 Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 10 10 200 []
   {{e#"andb" #"emp" (#"notb" #"emp" (#"false" #"emp")) (#"notb" #"emp" (#"false" #"emp"))}}.
+
+Compute fiat.
+Compute value_subst.
 
 Compute PositiveInstantiation.egraph_simpl' (fiat++value_subst) 1 1 20 [("x", {{s#"val" #"emp" #"bool"}})]
   {{e#"andb" #"emp" "x" (#"false" #"emp")}}.
