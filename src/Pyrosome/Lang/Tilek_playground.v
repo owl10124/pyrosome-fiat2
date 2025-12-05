@@ -19,11 +19,6 @@ Require Import Coq.Init.Nat.
 Definition nat_to_string (n : nat) : string :=
   NilZero.string_of_uint (Nat.to_uint n).
 
-Local Open Scope string_scope.
-
-
-
-(* ------BUILDING_TERMS_WITH_HOLES---------*)
 Fixpoint Zip_two_lists (X: Type) (Y: Type) (l1: list X) (l2: list Y) : list (X * Y) :=
   match l1 with
   | nil => nil
@@ -40,8 +35,15 @@ Fixpoint Find_x (Y: Type) (key: string) (l: list (string * Y)) : option Y :=
   | cons (head_x, head_y) tail => if (String.eqb key head_x) then (Some head_y) else (Find_x key tail)
   end.
 
-Local Open Scope string_scope.
+Fixpoint map_indexed (X: Type) (Y: Type) (f : nat -> X -> Y) (L: list X) (start: nat)  : list Y :=
+  (* Takes a list X and for each element v at index i replaces it with f (start + i) x and returns a list of such elements of type list Y*)
+  match L with
+  | nil => nil
+  | cons head tail => cons (f start head) (map_indexed f tail (start + 1) )
+  end.
 
+(* ------BUILDING_TERMS_WITH_HOLES---------*)
+Local Open Scope string_scope.
 Fixpoint insert_terms_into_context
       (list_of_subterms: list term) (explicit_args: list string) (context: ctx) (prefix: string) : list term :=
   match context with
@@ -51,13 +53,6 @@ Fixpoint insert_terms_into_context
     | None => (cons (con ("?" ++ prefix ++ head_name) []) (insert_terms_into_context list_of_subterms explicit_args rest_context prefix))
     | Some t => (cons t (insert_terms_into_context list_of_subterms explicit_args rest_context prefix))
     end
-  end.
-
-Fixpoint map_indexed (X: Type) (Y: Type) (f : nat -> X -> Y) (L: list X) (start: nat)  : list Y :=
-  (* Takes a list X and for each element v at index i replaces it with f (start + i) x and returns a list of such elements of type list Y*)
-  match L with
-  | nil => nil
-  | cons head tail => cons (f start head) (map_indexed f tail (start + 1) )
   end.
 
 Fixpoint build_term_with_holes_given_prefix (L: lang) (prefix: string) (index: nat) (t: term): term :=
@@ -82,8 +77,6 @@ Fixpoint build_term_with_holes_given_prefix (L: lang) (prefix: string) (index: n
 Definition build_term_with_holes (L: lang) (t: term) :=
   build_term_with_holes_given_prefix L "" 0 t.
 
-Local Open Scope string_scope.
-
 Fixpoint get_dummy_names (t: term) : list string :=
   match t with
   | var _ => []
@@ -100,6 +93,69 @@ Definition get_dummy_context (dummy_names: list string): ctx :=
   map (fun name => (name, scon "ty" [])) dummy_names.
 (* ----------------------------------------*)
 
+(* Injection rules  *)
+Fixpoint equalize_terms (L1: list string) (L2: list string) : list (clause string string) :=
+  match L1, L2 with
+  | _, nil => nil
+  | nil, _ => nil
+  | head_1 :: rest_1, head_2 :: rest_2 =>
+    (eq_clause head_1 head_2) :: equalize_terms rest_1 rest_2
+  end.
+
+Local Open Scope string_scope.
+Definition injection_rule_from_name_and_rule (name: string) (r: rule) : sequent string string :=
+  match r with
+  | term_rule context _ _ =>
+        let arguments1 := (map (fun x => (fst x) ++ "1") context) in
+        let arguments2 := (map (fun x => (fst x) ++ "2") context) in
+                {|
+              seq_assumptions :=
+              [atom_clause
+                    {| atom_fn := name ; atom_args := arguments1; atom_ret := "x0" |};
+                  atom_clause
+                    {| atom_fn := name ; atom_args := arguments2; atom_ret := "x0" |}];
+              seq_conclusions := equalize_terms arguments1 arguments2
+            |}
+  | sort_rule context _ =>
+        let arguments1 := (map (fun x => (fst x) ++ "1") context) in
+        let arguments2 := (map (fun x => (fst x) ++ "2") context) in
+                {|
+              seq_assumptions :=
+              [atom_clause
+                    {| atom_fn := name ; atom_args := arguments1; atom_ret := "x0" |};
+                  atom_clause
+                    {| atom_fn := name ; atom_args := arguments2; atom_ret := "x0" |}];
+              seq_conclusions := equalize_terms arguments1 arguments2
+            |}
+  (* Case below should never run, but if it runs we return a trivial rule *)
+  | _ => {|
+              seq_assumptions :=
+              [atom_clause
+                    {| atom_fn := name ; atom_args := ["X"]; atom_ret := "x0" |};
+                  atom_clause
+                    {| atom_fn := name ; atom_args := ["X"]; atom_ret := "x0" |}];
+              seq_conclusions := equalize_terms ["X"] ["X"]
+            |}
+  end.
+
+Definition build_injection_rule (L: lang) (name: string): sequent string string :=
+  match Find_x name L with
+  | Some r =>
+    injection_rule_from_name_and_rule name r
+  | None =>
+          {|
+              seq_assumptions :=
+              [atom_clause
+                    {| atom_fn := name ; atom_args := ["X"]; atom_ret := "x" |};
+                  atom_clause
+                    {| atom_fn := name ; atom_args := ["X"]; atom_ret := "x" |}];
+              seq_conclusions := equalize_terms ["X"] ["X"]
+            |}
+  end.
+
+Definition build_injection_rules (names: list string) (L: lang): list (sequent string string) :=
+  map (build_injection_rule L) names.
+(* ----------------------------- *)
 
 Local Open Scope char_scope.
 Definition weight (a: atom string string) : option positive :=
@@ -108,13 +164,10 @@ match a with
 | _ => Some (1 %positive)
 end.
 
-
 Local Open Scope string_scope.
-
 Definition empty_egraph := (Utils.EGraph.Defs.empty_egraph (idx:=string) (default : string)
                               (symbol:=string) (symbol_map := string_trie_map)
                               (idx_map := string_trie_map) (option positive)).
-
 
 Local Open Scope list_scope.
 
@@ -131,17 +184,8 @@ Definition result_to_term (result: Result.result term) : term :=
   | Result.Success t => t
   | _ => default
   end.
-Set Printing Implicit.
 
-Definition inject_for_expressions : list (sequent _ _) :=
-  [!! "G" = "G1", "A" = "A1" :- "exp" "G" "A" -> "x", "exp" "G1" "A1" -> "x"
-  ;
-  !! "G" = "G1", "A" = "A1" :- "val" "G" "A" -> "x", "val" "G1" "A1" -> "x"
-  ;
-  !! "A" = "A1", "B" = "B1" :- "->" "A" "B" -> "x", "->" "A1" "B1" -> "x"
-  ]%log.
-
-Definition state_operation :=
+Definition state_operation (L: lang) (inj_rules: list string) :=
   @saturate_until string String.eqb string_succ
     (default (A:= string))
     string
@@ -152,14 +196,12 @@ Definition state_operation :=
     (
     @QueryOpt.build_rule_set string String.eqb string_succ (default (A:= string))
       string  string_trie_map string_ptree_map_plus string_trie_map
-      string_list_trie_map 100  inject_for_expressions
+      string_list_trie_map 100  (build_injection_rules inj_rules L)
     )
     (Mret false) 100
     .
-Check print_egraph.
 
-Check sort_var_to_con.
-Definition infer (L: lang) (context: ctx) (t: term) (s: sort) :=
+Definition infer (L: lang) (inj_rules: list string) (context: ctx) (t: term) (s: sort) :=
   let Language_plus_rules := L ++ (ctx_to_rules context) in
   let Term_with_no_variables := (var_to_con t) in
   let term_with_holes := build_term_with_holes Language_plus_rules Term_with_no_variables in
@@ -171,12 +213,13 @@ Definition infer (L: lang) (context: ctx) (t: term) (s: sort) :=
                                  _ (weighted_depth_analysis weight) sort_of [str] inst3 in
   let '(_, inst5) := @union string String.eqb (default (A:= string)) string string_trie_map string_trie_map string_list_trie_map
                      _ (weighted_depth_analysis weight) id_sort id_original_sort inst4 in
-  let '(_, inst6) := state_operation inst5 in
-  (* print_egraph inst6. *)
+  let '(_, inst6) := (state_operation L inj_rules) inst5 in
   con_to_var new_context (result_to_term (extract_weighted inst6 1000 str)).
 
-Import Core.Notations.
-Compute infer (stlc ++ exp_subst ++ value_subst)
+
+(* Import Core.Notations. *)
+
+(* Compute infer (stlc ++ exp_subst ++ value_subst) (["exp"; "->"; "val"])
             [
               ("e", scon "exp" [var "A"; {{e #"ext" "G" "A"}}]);
               ("f", {{s #"exp" (#"ext" "G" "A") (#"->" "A" (#"->" "B" "C"))}});
@@ -185,10 +228,9 @@ Compute infer (stlc ++ exp_subst ++ value_subst)
               ("C", scon "ty" []);
               ("G", scon "env" [])
             ]
+{{e #"lambda" "A" (#"app" "f" "e")}} {{s #"val" "G" (#"->" "A" (#"->" "B" "C"))}}. *)
 
-{{e #"lambda" "A" (#"app" "f" "e")}} {{s #"val" "G" (#"->" "A" (#"->" "B" "C"))}}.
-
-Compute infer (stlc ++ exp_subst ++ value_subst)
+Compute infer (stlc ++ exp_subst ++ value_subst) ((["exp"; "->"; "val"]))
             [
             ("e", scon "exp" [var "B"; con "ext" [var "A"; var "G"] ]);
             ("B", scon "ty" []);
@@ -196,95 +238,36 @@ Compute infer (stlc ++ exp_subst ++ value_subst)
             ("G", scon "env" [])
             ]
 (* (con "->" [var "B"; var "A"]) (scon "ty" []). *)
-
 (con "lambda" [var "e"; var "A"]) (scon "val" [con "->" [var "B"; var "A"]; var "G"]).
 
-(* Eval unfold Monad.StateMonad.state in *)
-(*  I don't remember what this was for? *)
-(* Definition TERM_RULE :=
-term_rule
-           [("v", scon "val" [var "A"; var "G'"]); (
-            "A", scon "ty" []); ("g", scon "sub" [var "G'"; var "G"]);
-            ("G'", scon "env" []); ("G", scon "env" [])] [
-           "v"; "g"] (scon "val" [var "A"; var "G"]). *)
-
-Definition Names_for_term_rule (TERM_RULE: rule) : list string :=
-  match TERM_RULE with
-  | term_rule c x y =>
-      map fst c
-  | _ => []
-  end.
 
 
 
-Theorem check: stlc_def
-	 = [
-    ("STLC-beta",
-         term_eq_rule
-           [("v", scon "val" [var "A"; var "G"]);
-            ("e", scon "exp" [var "B"; con "ext" [var "A"; var "G"]]);
-            ("B", scon "ty" []); ("A", scon "ty" []); (
-            "G", scon "env" [])]
-           (con "app"
-              [con "ret" [var "v"];
-               con "ret" [con "lambda" [var "e"; var "A"]]])
-           (con "exp_subst" [var "e"; con "snoc" [var "v"; con "id" []]])
-           (scon "exp" [var "B"; var "G"]));
 
-    ("exp_subst app",
-         term_eq_rule
-           [("g", scon "sub" [var "G"; var "G'"]); (
-            "G'", scon "env" []); ("e'", scon "exp" [var "A"; var "G"]);
-            ("e", scon "exp" [con "->" [var "B"; var "A"]; var "G"]);
-            ("B", scon "ty" []); ("A", scon "ty" []); (
-            "G", scon "env" [])]
-           (con "exp_subst" [con "app" [var "e'"; var "e"]; var "g"])
-           (con "app"
-              [con "exp_subst" [var "e'"; var "g"];
-               con "exp_subst" [var "e"; var "g"]])
-           (scon "exp" [var "B"; var "G'"]));
 
-    ("app",
-         term_rule
-           [("e'", scon "exp" [var "A"; var "G"]);
-            ("e", scon "exp" [con "->" [var "B"; var "A"]; var "G"]);
+
+
+
+
+
+
+Definition c := [
+            ("e", scon "exp" [var "B"; con "ext" [var "A"; var "G"] ]);
             ("B", scon "ty" []);
             ("A", scon "ty" []);
-            ("G", scon "env" [])] ["e'"; "e"] (scon "exp" [var "B"; var "G"]));
+            ("G", scon "env" [])
+            ].
 
-    ("val_subst lambda",
-         term_eq_rule
-           [("g", scon "sub" [var "G"; var "G'"]); (
-            "G'", scon "env" []);
-            ("e", scon "exp" [var "B"; con "ext" [var "A"; var "G"]]);
-            ("B", scon "ty" []); ("A", scon "ty" []); (
-            "G", scon "env" [])]
-           (con "val_subst" [con "lambda" [var "e"; var "A"]; var "g"])
-           (con "lambda"
-              [con "exp_subst"
-                 [var "e";
-                  con "snoc" [con "hd" []; con "cmp" [var "g"; con "wkn" []]]];
-               var "A"]) (scon "val" [con "->" [var "B"; var "A"]; var "G'"]));
 
-    ("lambda",
-         term_rule
-            (* Context: *)
-           [("e", scon "exp" [var "B"; con "ext" [var "A"; var "G"]]);
-            ("B", scon "ty" []);
-            ("A", scon "ty" []);
-            ("G", scon "env" [])]
-
-            (* Explicit arguments *)
-            ["e"; "A"]
-
-            (* Sort??? *)
-           (scon "val" [con "->" [var "B"; var "A"]; var "G"]));
-
-    ("->",
-         term_rule [("t'", scon "ty" []); ("t", scon "ty" [])] [
-           "t'"; "t"] (scon "ty" []))]
-     .
-Proof. reflexivity. Qed.
+(* Lemma check_elab: elab_term
+  (stlc ++ exp_subst ++ value_subst)
+  c
+    (con "lambda" [var "e"; var "A"])
+    (con "lambda" [var "e"; var "B"; var "A"; var "G"])
+    (scon "val" [con "->" [var "B"; var "A"]; var "G"]).
+Proof.
+unfold c.
+Matches.t. *)
 
 
 (* -----------------------Testing---------------------- *)
