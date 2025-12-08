@@ -230,6 +230,7 @@ Definition infer (L: lang) (inj_rules: list string) (context: ctx) (t: term) (s:
             ]
 {{e #"lambda" "A" (#"app" "f" "e")}} {{s #"val" "G" (#"->" "A" (#"->" "B" "C"))}}. *)
 
+(*
 Compute infer (stlc ++ exp_subst ++ value_subst) ((["exp"; "->"; "val"]))
             [
             ("e", scon "exp" [var "B"; con "ext" [var "A"; var "G"] ]);
@@ -239,7 +240,7 @@ Compute infer (stlc ++ exp_subst ++ value_subst) ((["exp"; "->"; "val"]))
             ]
 (* (con "->" [var "B"; var "A"]) (scon "ty" []). *)
 (con "lambda" [var "e"; var "A"]) (scon "val" [con "->" [var "B"; var "A"]; var "G"]).
-
+*)
 
 
 
@@ -271,11 +272,8 @@ Matches.t. *)
 
 
 (* -----------------------Testing---------------------- *)
+(*
 Compute build_term_with_holes stlc_def (con "lambda" [var "e"; var "A"]).
 Compute build_term_with_holes stlc_def (con "app" [(con "lambda" [var "e"; var "A"]); var "e'"]).
 Compute build_term_with_holes stlc_def (con "lambda" [var "e"; var "A"]).
-(* УСПЭЭЭЭЭХ! *)
-Compute build_term_with_holes stlc_def (con "lambda" [var "e"; var "A"]).
-Compute build_term_with_holes stlc_def (con "lambda" [var "e"; var "A"]).
-Compute build_term_with_holes stlc_def (con "lambda" [var "e"; var "A"]).
-Compute build_term_with_holes stlc_def (con "lambda" [var "e"; var "A"]).
+*)
