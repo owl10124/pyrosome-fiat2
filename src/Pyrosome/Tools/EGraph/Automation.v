@@ -87,7 +87,7 @@ Ltac egraph rule_transform n :=
         |- eq_term ?l ?c ?t ?e1 ?e2 =>
           let l' := constr:(ctx_to_rules c ++ l) in
           let rs := constr:(StringInstantiation.build_rule_set
-                              (rule_transform l') l') in
+                              1000 (rule_transform l') l') in
         let result := (eval vm_compute in
                         (StringInstantiation.egraph_equal (*V:=string*) l' rs n c e1 e2 t)) in
         lazymatch result with
@@ -109,11 +109,11 @@ Ltac egraph rule_transform n :=
             | (?x1,?e1') =>*)
        (* let assign := eval vm_compute in (fst (run_query (@PositiveInstantiation.compat_intersect) rw1 7 g)) in*)
             pose (lie_to_user (real:=g) tt) as graph;
-
+           
               pose (lie_to_user (real:=rs) tt) as rules;
                  idtac b (*"! Also," e1 "became" e1' "with id" x1
         end*)
-
+         
         | _ => fail "ill-formed!"
         end
     end.
@@ -133,18 +133,8 @@ representing infinity as None, where a value of infinity means that term will ne
 
  *******************************)
 Import StringInstantiation.
-Check add_open_term.
-Check empty_egraph.
-Check default (string) : WithDefault string.
-Check empty_egraph.
-Check add_open_term.
-Check instance.
-Check @rebuild.
-Locate string_list_trie_map.
-Check @rebuild.
-About rebuild.
+
 Notation instance := (instance string string string_trie_map string_trie_map string_list_trie_map (option positive)).
-Print instance.
 
 Definition empty_egraph := (empty_egraph (idx:=string) (default : string)
                               (symbol:=string) (symbol_map := string_trie_map)
@@ -156,12 +146,9 @@ Definition add_ctx weight l :=
 Definition add_open_term weight l :=
   add_open_term (V:= string) (V_map := string_trie_map) string_succ "@sort_of" l (H:=weighted_depth_analysis weight) true.
 
-
 Definition add_open_sort weight l :=
   add_open_sort (V:= string) (V_map := string_trie_map) string_succ "@sort_of" l (H:=weighted_depth_analysis weight) true.
 
 Definition rebuild weight fuel : state instance _ := (rebuild (idx:=string) fuel (symbol:=string) (H:=weighted_depth_analysis weight)).
-Check @rebuild.
-Check weighted_depth_analysis.
 
 Notation extract_weighted := (extract_weighted (V:=string) (V_map:=string_trie_map) (V_trie:=string_list_trie_map)).
