@@ -590,6 +590,7 @@ Goal eq_term logic {{c  "a": #"S", "b" : #"S" }}
   wouldn't this mean that the top-level analyses aren't updated?.
   but the problem is that they are out of sync*)
   Import coqutil.Datatypes.Result.
+  (*
   lazymatch goal with
   |- eq_term ?l ?c ?t ?e1 ?e2 =>
     let l' := constr:(ctx_to_rules c ++ l) in
@@ -606,6 +607,7 @@ Goal eq_term logic {{c  "a": #"S", "b" : #"S" }}
    existT id _ ((of_Success ex1), x1, (of_Success ex2), x2)) in
     idtac e'
   end.
+*)
   (*
   Compute (print_egraph graph).
   Compute (map.tuples graph.(parents)).

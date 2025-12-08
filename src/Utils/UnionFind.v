@@ -4065,6 +4065,7 @@ Section __.
       }
       apply forest_join.
       destruct H1 as [m2 [m2' [H1a [H1b ?] ] ] ].
+      cbv [seps] in H1.
       exists m2, (map.put m2' i j).
       intuition eauto.
       {
