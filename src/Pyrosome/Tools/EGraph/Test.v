@@ -11,8 +11,8 @@ From Utils.EGraph Require Import Defs QueryOpt Semantics.
 Import Monad.StateMonad.
 From Pyrosome.Theory Require Import Core.
 Import Core.Notations.
-From Pyrosome.Tools.EGraph Require Import Defs.
-Import StringInstantiation.
+From Pyrosome.Tools.EGraph Require Defs.
+Import Defs.StringInstantiation.
 
 (* TODO: make this available in other places than the tests *)
 Declare Custom Entry logrule.
@@ -223,7 +223,7 @@ Definition monoid_rule_set_full :=
 
 Definition monoid_rule_set :=
   Eval vm_compute in
-    (build_rule_set 1000 (PositiveInstantiation.filter_eqn_rules monoid) monoid).
+    (build_rule_set 1000 (Defs.PositiveInstantiation.filter_eqn_rules monoid) monoid).
 
 Definition monoid_ex1 : lang string := 
   {[l
@@ -423,7 +423,7 @@ Definition logic : lang string :=
 
 
 Eval vm_compute in
-    (map (uncurry (rule_to_log_rule (string_trie_map)
+    (map (uncurry (Defs.rule_to_log_rule (string_trie_map)
                      (@StringListMap.string_list_trie_map)
                      StringListMap.string_succ "sort_of"
                      logic (analysis_result:=unit) 1000)) logic).
@@ -450,7 +450,7 @@ Definition logic_rule_set_full :=
 
 Definition logic_rule_set :=
   Eval vm_compute in
-    (build_rule_set 1000 (PositiveInstantiation.filter_eqn_rules logic) logic).
+    (build_rule_set 1000 (Defs.PositiveInstantiation.filter_eqn_rules logic) logic).
 (*TODO: is the optimization not working? multiple S write clauses.
   answer: no, since optimization doesn't handle existential vars.
   
