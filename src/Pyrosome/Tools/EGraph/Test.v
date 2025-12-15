@@ -14,6 +14,11 @@ Import Core.Notations.
 From Pyrosome.Tools.EGraph Require Defs.
 Import Defs.StringInstantiation.
 
+
+Require Import BinNums.
+Import PosListMap.
+Require Tools.UnElab.
+
 (* TODO: make this available in other places than the tests *)
 Declare Custom Entry logrule.
 Declare Custom Entry atom.
@@ -461,9 +466,10 @@ Definition logic_ex1_base :=
     (snd (saturate_until string_succ "v0"
        (@PosListMap.compat_intersect) 1000 logic_rule_set_full (Mret false) 1
        (empty_egraph _ _))).
+(*
 Compute (map (fun '(x,y) => (x, map.tuples y)) (map.tuples logic_ex1_base.(db))).
 Compute (filter (fun p => negb (eqb (fst p) (snd p)))
-           (map.tuples monoid_ex1_base.(equiv).(UnionFind.parent _ _ _))).
+           (map.tuples monoid_ex1_base.(equiv).(UnionFind.parent _ _ _))).*)
 
 Definition logic_ex1_graph :=
   Eval native_compute in
@@ -471,13 +477,10 @@ Definition logic_ex1_graph :=
        (@PosListMap.compat_intersect) 1000 logic_rule_set (Mret false) 5
        logic_ex1_base)).
 (*TODO: why no unifications?*)
+(*
 Compute (filter (fun p => negb (eqb (fst p) (snd p)))
            (map.tuples monoid_ex1_base.(equiv).(UnionFind.parent _ _ _))).
-
-Require Import BinNums Defs.
-Import PosListMap.
-Instance my_analysis {V} : analysis V V _ := weighted_depth_analysis (fun _ => Some xH).
-Require Tools.UnElab.
+*)
 
 
   Arguments Defs.run1iter {idx}%type_scope {Eqb_idx} idx_succ%function_scope 
@@ -485,15 +488,17 @@ Require Tools.UnElab.
   {idx_map}%function_scope idx_map_plus {idx_trie}%function_scope {analysis_result}%type_scope 
   {H} spaced_list_intersect%function_scope rebuild_fuel%nat_scope rs _.
 
+  
+
 Ltac egraph rn n en :=
       lazymatch goal with
         |- eq_term ?l ?c ?t ?e1 ?e2 =>
-          let l' := constr:(ctx_to_rules c ++ l) in
-          let rs := constr:(StringInstantiation.build_rule_set rn
-                              (PositiveInstantiation.filter_eqn_rules l') l') in
+          let l' := constr:(Defs.ctx_to_rules c ++ l) in
+          let rs := constr:(Defs.StringInstantiation.build_rule_set rn
+                              (Defs.PositiveInstantiation.filter_eqn_rules l') l') in
           
         let result := (eval vm_compute in
-                        (StringInstantiation.egraph_equal (*V:=string*) l' rs rn n en c e1 e2 t)) in
+                        (Defs.StringInstantiation.egraph_equal (*V:=string*) l' rs rn n en c e1 e2 t)) in
           let result' := eval vm_compute in
           (Defs.run1iter string_succ "v0" string_ptree_map_plus string_ptree_map_plus
              (@compat_intersect) 0 rs (snd result)
@@ -551,14 +556,16 @@ Ltac print_rules :=
  
 lazymatch goal with
   |- eq_term ?l ?c ?t ?e1 ?e2 =>
-    let l' := constr:(ctx_to_rules c ++ l) in
+    let l' := constr:(Defs.ctx_to_rules c ++ l) in
     let r :=  eval vm_compute in
-    (map (uncurry (rule_to_log_rule (string_trie_map)
+    (map (uncurry (Defs.rule_to_log_rule (string_trie_map)
                      (@StringListMap.string_list_trie_map)
                      StringListMap.string_succ "@sort_of"
-                     l' (analysis_result:=unit) 1000)) (PositiveInstantiation.filter_eqn_rules l')) in
+                     l' (analysis_result:=unit) 1000)) (Defs.PositiveInstantiation.filter_eqn_rules l')) in
         idtac r
 end.
+
+Instance my_analysis {V} : analysis V V _ := Defs.weighted_depth_analysis (fun _ => Some xH).
 
 
 Goal eq_term logic {{c  "a": #"S", "b" : #"S" }}
@@ -568,17 +575,18 @@ Goal eq_term logic {{c  "a": #"S", "b" : #"S" }}
 
 
   egraph 1000 10 100.
-  Compute (map.get graph.(analyses _ _ _ _ _ _) "#9").
+  (* Compute (map.get graph.(analyses _ _ _ _ _ _) "#9"). *)
   (*TODO: 9 can be xO xH here, why is it xI xH?*)
   (* issue: 9 different after 2nd iter, not updated in db,
      but 5 does get updated correctly
    *)
-  
+  (*
   Compute (print_egraph graph).
   Compute (map.tuples graph.(parents)).
   Compute  (named_map map.tuples (map.tuples (graph.(db)))).
   Compute (analyze _ _ _ (analysis:= my_analysis)
              (Build_atom "/\" ["#10"; "#5"] "#9") [Some xH; Some xH]).
+*)
 
   (*(*TODO: extraction is broken*)
   TODO: is the analysis not updated in order to not update the epoch?.
@@ -614,12 +622,14 @@ Goal eq_term logic {{c  "a": #"S", "b" : #"S" }}
 *)
   (*TODO: did something get unioned the wrong way? 7 still has its parents, as does 10.
   the 7,9 union should have merged them*)
+  (*
   Compute (print_egraph graph).
   Compute (map.tuples graph.(parents)).
   Compute graph.(worklist).
   Compute (map.tuples graph.(parents)).
 
   Compute (print_egraph (snd (rebuild 100 graph))).
+  *)
   (*
   TODO: rebuild doesn't do anything when it should; 7 non-canonical.
   Note: wrong, but might be harmless?
@@ -627,13 +637,13 @@ Goal eq_term logic {{c  "a": #"S", "b" : #"S" }}
           TODO: sort of 7 is 10. what is 10?.
   Note: above will be resolved on full rebuilding
               *)
-print_rules.
+(*print_rules.*)
 (*TODO: still have bug on T rule*)
   pose (
    (!! "#1" = "#2", "@sort_of" "#2" -> "" :- "/\" "#1" "#" -> "#2", "S" -> "", 
      "F" -> "#1", "@sort_of" "#" -> "")%log) as seq.
   
-
+(*
   (* TODO: issue not with filter! why is there no #2 in the conclusion eqs?
      where did #2 come from? did something not do a proper subst?
    *)
@@ -655,7 +665,7 @@ print_rules.
   Compute (QueryOpt.opt_conclusion_atoms string string_Eqb
       StringListMap.string_succ string_default string
       StringListMap.string_trie_map StringListMap.string_trie_map
-      StringListMap.string_list_trie_map seq 1000).
+      StringListMap.string_list_trie_map seq 1000). *)
   (*
   [{| atom_fn := "@sort_of"; atom_args := ["#2"]; atom_ret := "" |};
         {| atom_fn := "@sort_of"; atom_args := ["#"]; atom_ret := "" |};
@@ -758,9 +768,9 @@ end.
                 
 *)
 
- 
+ (*
 Compute (*(named_map (named_map (entry_value _ _))*)
-           (named_map map.tuples (map.tuples (graph.(db)))).
+           (named_map map.tuples (map.tuples (graph.(db)))).*)
 (*TODO: fires when T in the LHS of /\.
   Could this be a bug w/ dead var eqns on the write side?
  *)
@@ -800,19 +810,22 @@ end.
  !! "#0" = "", "#" = "#2" :- "/\" "#1" "#" -> "#2", "S" -> "", 
     "T" -> "#1", "@sort_of" "#" -> "";
  *)
+(*
 Compute (*(named_map (named_map (entry_value _ _))*)
            (named_map map.tuples (map.tuples (graph.(db)))).
                      
 Compute (map.tuples graph.(equiv).(parent _ _ _)).
+*)
 
 (*TODO: why false?
   
  *)
-Compute (fst (egraph_sort_of StringListMap.string_succ "@sort_of" "" "#5" graph)).
+(*
+Compute (fst (Defs.egraph_sort_of StringListMap.string_succ "@sort_of" "" "#5" graph)).
 
 (*TODO: issue: unified T and S! why?*)
-Compute (eq_proven StringListMap.string_succ "@sort_of" "" ""
+Compute (Defs.eq_proven StringListMap.string_succ "@sort_of" "" ""
            "#5" graph).
-
+*)
 
 Abort.
