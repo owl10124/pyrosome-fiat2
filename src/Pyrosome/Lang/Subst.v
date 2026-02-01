@@ -65,6 +65,7 @@ Definition subst_def : lang :=
       #"ty" "G" srt
   ];
 
+  (* QUESTION: does ty_subst create a type that maps to A under the "transformation" g?  *)
   [:| "G" : #"env", "G'" : #"env", "g" : #"sub" "G" "G'",
        "A" : #"ty" "G'"
        -----------------------------------------------
@@ -209,7 +210,7 @@ Definition definitely_fresh (s : string) (l : list string) :=
   let len := List.fold_left Nat.max (map String.length l) 0 in
   String.append s (string_of_list_ascii (repeat ("'"%char : ascii) len)).
 
-Definition choose_fresh (s : string) (c:ctx) :=
+Definition choose_fresh (s : string) (c : ctx) :=
   if notinb s (map fst c) then s else definitely_fresh s (map fst c).
 
 (*TODO: duplicated*)
